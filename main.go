@@ -24,14 +24,14 @@ func main() {
 	cfg := config.Load(cfgPath)
 	log.Printf("config loaded: %s", cfgPath)
 
-	c := cache.New(cfg.CacheSize)
-	log.Printf("freecache initialized: %d bytes", cfg.CacheSize)
+	c := cache.New(cfg.Cache.Size)
+	log.Printf("freecache initialized: %d bytes", cfg.Cache.Size)
 
 	h := handler.New(c)
 	engine := router.New(h)
 
-	log.Printf("WinnerProxy listening on %s", cfg.Addr)
-	if err := engine.Run(cfg.Addr); err != nil {
+	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)
+	if err := engine.Run(cfg.Server.Addr); err != nil {
 		log.Fatalf("server stopped: %v", err)
 	}
 }

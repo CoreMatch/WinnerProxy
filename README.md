@@ -33,12 +33,12 @@ WinnerProxy/
 ## Build & Run
 
 ```bash
-# Build a static binary into ./bin
-go build -o bin/winnerproxy .
+# Build a static binary into ./build
+go build -o build/winnerproxy .
 
 # Run from the directory where config.yml lives (the binary
 # loads config.yml from the same folder as the executable)
-./bin/winnerproxy
+./build/winnerproxy 
 ```
 
 On first launch, WinnerProxy writes a default `config.yml` next to the executable if one is not present, then listens on the configured address.
