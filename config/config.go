@@ -20,6 +20,8 @@ type Config struct {
 	Proxy ProxyConfig `yaml:"proxy"`
 	// Upstreams groups all upstream Mojang / Yggdrasil endpoints.
 	Upstreams UpstreamsConfig `yaml:"upstreams"`
+	// Mapping controls player identity mapping behavior.
+	Mapping MappingConfig `yaml:"mapping"`
 	// Site holds non-runtime metadata about the deployment.
 	Site SiteConfig `yaml:"site"`
 	// Version is the schema version of this config file.
@@ -70,6 +72,18 @@ type SiteConfig struct {
 	Version string `yaml:"version"`
 }
 
+// MappingConfig controls player identity mapping behavior.
+type MappingConfig struct {
+	// MojangToExternal enables mapping Mojang authenticated players to external service identities.
+	MojangToExternal bool `yaml:"mojang_to_external"`
+	// ExternalServiceID is the ID of the external service to map to when MojangToExternal is enabled.
+	ExternalServiceID string `yaml:"external_service_id"`
+	// AutoResolveName enables automatic name conflict resolution.
+	AutoResolveName bool `yaml:"auto_resolve_name"`
+	// AutoResolveUUID enables automatic UUID conflict resolution.
+	AutoResolveUUID bool `yaml:"auto_resolve_uuid"`
+}
+
 // UpstreamConfig describes a single upstream endpoint the proxy can
 // route requests to.
 type UpstreamConfig struct {
@@ -109,10 +123,6 @@ func Default() *Config {
 			CallbackURL: "",
 			TimeoutSec:  10,
 		},
-		Site: SiteConfig{
-			Name:    "WinnerProxy",
-			Version: "0.1.0",
-		},
 		Upstreams: UpstreamsConfig{
 			Official: UpstreamConfig{
 				URL:        "https://api.minecraftservices.com",
@@ -120,10 +130,20 @@ func Default() *Config {
 				Enabled:    true,
 			},
 			YggdrasilAPI: UpstreamConfig{
-				URL:        "https://authserver.mojang.com",
+				URL:        "",
 				TimeoutSec: 10,
-				Enabled:    true,
+				Enabled:    false,
 			},
+		},
+		Mapping: MappingConfig{
+			MojangToExternal: false,
+			ExternalServiceID: "yggdrasil",
+			AutoResolveName:   true,
+			AutoResolveUUID:   true,
+		},
+		Site: SiteConfig{
+			Name:    "WinnerProxy",
+			Version: "0.1.0",
 		},
 		Version: "1",
 	}

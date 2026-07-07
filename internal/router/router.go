@@ -6,7 +6,6 @@ import (
 	"github.com/winnerproxy/winnerproxy/internal/handler"
 )
 
-// New builds the Gin engine with all routes registered.
 func New(h *handler.Handler) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
@@ -19,6 +18,14 @@ func New(h *handler.Handler) *gin.Engine {
 		cacheGroup.POST("", h.CacheSet)
 		cacheGroup.DELETE("/:key", h.CacheDelete)
 		cacheGroup.GET("/stats", h.CacheStats)
+	}
+
+	yggdrasilGroup := r.Group("/yggdrasil")
+	{
+		yggdrasilGroup.GET("", h.YggdrasilRoot)
+		yggdrasilGroup.GET("/sessionserver/session/minecraft/hasJoined", h.HasJoined)
+		yggdrasilGroup.GET("/sessionserver/session/minecraft/profile/:uuid", h.QueryProfile)
+		yggdrasilGroup.POST("/api/profiles/minecraft", h.BatchQuery)
 	}
 
 	return r

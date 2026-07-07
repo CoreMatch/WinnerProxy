@@ -8,6 +8,8 @@ import (
 	"github.com/winnerproxy/winnerproxy/config"
 	"github.com/winnerproxy/winnerproxy/internal/cache"
 	"github.com/winnerproxy/winnerproxy/internal/handler"
+	"github.com/winnerproxy/winnerproxy/internal/mapping"
+	"github.com/winnerproxy/winnerproxy/internal/proxy"
 	"github.com/winnerproxy/winnerproxy/internal/router"
 )
 
@@ -27,7 +29,13 @@ func main() {
 	c := cache.New(cfg.Cache.Size)
 	log.Printf("freecache initialized: %d bytes", cfg.Cache.Size)
 
-	h := handler.New(c)
+	p := proxy.New(cfg)
+	log.Printf("proxy initialized with %d upstream services", len(p.GetServices()))
+
+	m := mapping.New(c, cfg, p)
+	log.Printf("mapping initialized")
+
+	h := handler.New(c, p, m)
 	engine := router.New(h)
 
 	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)
@@ -36,9 +44,6 @@ func main() {
 	}
 }
 
-// preStart runs initialization steps that must complete before the
-// server begins accepting connections. It ensures a config.yml exists
-// next to the executable, creating a default one if missing.
 func preStart(cfgPath string) {
 	log.Printf("running pre-start process: %s", cfgPath)
 	if _, err := os.Stat(cfgPath); err == nil {
@@ -55,8 +60,6 @@ func preStart(cfgPath string) {
 	log.Printf("created default config: %s", cfgPath)
 }
 
-// configPath returns the absolute path of config.yml located in the
-// same directory as the running executable.
 func configPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
