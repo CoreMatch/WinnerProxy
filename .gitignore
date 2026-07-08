@@ -32,3 +32,5 @@ go.work.sum
 
 build/*
 .trae/
+
+docs*

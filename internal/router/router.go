@@ -12,6 +12,11 @@ func New(h *handler.Handler) *gin.Engine {
 
 	r.GET("/health", h.Health)
 
+	// Yggdrasil status endpoint: serve at both "/" and "/yggdrasil"
+	// so Mojang/legacy clients that probe the root path get a valid response.
+	r.GET("/", h.YggdrasilRoot)
+	r.GET("/yggdrasil", h.YggdrasilRoot)
+
 	cacheGroup := r.Group("/cache")
 	{
 		cacheGroup.GET("/:key", h.CacheGet)
@@ -22,7 +27,6 @@ func New(h *handler.Handler) *gin.Engine {
 
 	yggdrasilGroup := r.Group("/yggdrasil")
 	{
-		yggdrasilGroup.GET("", h.YggdrasilRoot)
 		yggdrasilGroup.GET("/sessionserver/session/minecraft/hasJoined", h.HasJoined)
 		yggdrasilGroup.GET("/sessionserver/session/minecraft/profile/:uuid", h.QueryProfile)
 		yggdrasilGroup.POST("/api/profiles/minecraft", h.BatchQuery)

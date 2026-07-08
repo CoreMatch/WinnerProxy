@@ -1,159 +1,107 @@
 # WinnerProxy
 
-A lightweight, high-performance in-memory cache HTTP service written in Go. It exposes a small REST API for storing, retrieving, deleting, and inspecting cache entries, backed by [FreeCache](https://github.com/coocood/freecache) and served via [Gin](https://github.com/gin-gonic/gin).
+> A thin protocol-translation layer that lets Mojang-authenticated Minecraft players enter a Yggdrasil-only server, with [HRPAuth](https://example.com/hrpauth) as the identity source of truth.
+
+## What is this?
+
+WinnerProxy is a small Go service that sits between a Minecraft server (which only knows Yggdrasil) and the real authentication world (Mojang official + HRPAuth). It speaks Yggdrasil on the front, and translates to Mojang sessionserver + HRPAuth on the back.
+
+The single design rule:
+
+> **All of the online players should be also Yggdrasil API players. The UUID and profile of the online players will be linked to the Yggdrasil API service.**
+
+In practice: HRPAuth is the source of truth for every player's in-game identity. Whether a player logs in with their HRPAuth password or with a Mojang/Microsoft account, they appear as the same player to the Minecraft server.
+
+## How it works
+
+```
+┌──────────┐                       ┌──────────────┐                  ┌─────────┐
+│ Minecraft│ ──hasJoined(u, sId)──► │              │ ──HasJoined────► │ HRPAuth │
+│ server   │                       │              │                  │ (公开端点)│
+│ (Yggdra- │ ◄──── profile ─────── │ WinnerProxy  │ ◄── 200/204 ─── │         │
+│  sil     │                       │              │                  └─────────┘
+│  only)   │                       │              │
+└──────────┘                       │              │ ──HasJoined────► ┌─────────┐
+                                   │              │                  │ Mojang  │
+                                   │              │ ◄── 200/204 ─── │ sessionserver│
+                                   │              │                  └─────────┘
+                                   │              │
+                                   │              │ ──Register─────► ┌─────────┐
+                                   │              │   (M.T. 鉴权)   │ HRPAuth │
+                                   │              │ ◄── profile_id─ │ /register│
+                                   │              │                  └─────────┘
+                                   └──────────────┘
+```
+
+Three-stage `hasJoined` flow:
+
+1. **HRPAuth auth path** — try HRPAuth's public `hasJoined` first. If the player has an active HRPAuth session, return HRPAuth's profile (HRPAuth skin, HRPAuth UUID).
+2. **Mojang auth path** — on 204, try Mojang's official `hasJoined`. If the player has a valid Mojang session, take the returned Mojang profile and forward it to stage 3.
+3. **Proxy registration** — call HRPAuth's `POST /register` with HRPAuth's M.T. (Manage Token), passing the Mojang UUID. HRPAuth handles all internal binding/upsert logic and returns a `profile_id`. WinnerProxy returns `{id: profile_id, name, properties: mojangProperties}` — i.e., HRPAuth identity with Mojang skin.
+
+All binding, unbinding, cleanup, and direct database operations are HRPAuth's internal concerns. WinnerProxy is a stateless client of HRPAuth.
 
 ## Features
 
-- In-memory key/value cache powered by FreeCache (no external dependencies)
-- RESTful HTTP API built on Gin
-- Per-entry TTL (or "never expire" when TTL is `0`)
-- Hit / miss / eviction / expiration statistics
-- Auto-generates a default `config.yml` on first run
-- Single static binary, no DB required
-
-## Project Layout
-
-```
-WinnerProxy/
-├── main.go                    # entrypoint
-├── config/config.go          # YAML config loader
-├── internal/
-│   ├── cache/freecache.go    # FreeCache wrapper
-│   ├── handler/handler.go    # HTTP handlers
-│   └── router/router.go      # route registration
-├── config.yml                # generated on first run
-├── go.mod
-└── go.sum
-```
+- **Thin Yggdrasil proxy** — `hasJoined` / `profile/:uuid` / `api/profiles/minecraft` all transparently backed by HRPAuth
+- **Seamless Mojang → HRPAuth registration** — first-time Mojang players are auto-registered into HRPAuth (with `winnerproxy=1` and a placeholder email)
+- **Single source of truth** — every in-game player identity is owned by HRPAuth, never by WinnerProxy
+- **Single static binary** — no DB, no Redis, no external dependencies
+- **Hot-configurable upstream** — Mojang and HRPAuth timeouts set in `config.yml`
 
 ## Requirements
 
 - Go 1.26.4 or later
+- A reachable HRPAuth instance (recommended: same operator, same machine)
+- Outbound HTTPS to `sessionserver.mojang.com` and `api.minecraftservices.com`
 
 ## Build & Run
 
 ```bash
-# Build a static binary into ./build
 go build -o build/winnerproxy .
-
-# Run from the directory where config.yml lives (the binary
-# loads config.yml from the same folder as the executable)
-./build/winnerproxy 
+./build/winnerproxy
 ```
 
-On first launch, WinnerProxy writes a default `config.yml` next to the executable if one is not present, then listens on the configured address.
-
-## Configuration
-
-`config.yml` is read from the directory containing the executable. Defaults:
-
-```yaml
-addr: ":2779"                    # HTTP listen address
-cache_size: 104857600            # FreeCache size in bytes (100 MB)
-```
-
-Notes:
-- `cache_size` has a minimum of 512 KB; smaller values are rounded up by FreeCache.
-- Missing or unreadable config files fall back to defaults.
-
-## API
-
-Base URL: `http://<addr>`
-
-### Health check
-
-```
-GET /health
-```
-
-Response `200 OK`:
-```json
-{ "status": "ok" }
-```
-
-### Get a cached value
-
-```
-GET /cache/:key
-```
-
-- `200 OK` — returns the raw value as `application/octet-stream`
-- `404 Not Found` — key missing
-
-### Set a cached value
-
-```
-POST /cache
-Content-Type: application/json
-```
-
-Request body:
-```json
-{
-  "key": "user:42",
-  "value": "alice",
-  "ttl_seconds": 60
-}
-```
-
-- `ttl_seconds: 0` means the entry never expires.
-- Response `200 OK`:
-  ```json
-  {
-    "key": "user:42",
-    "ttl_seconds": 60,
-    "expires_at": "2026-07-03T12:34:56Z"
-  }
-  ```
-
-### Delete a cached value
-
-```
-DELETE /cache/:key
-```
-
-Response `200 OK`:
-```json
-{ "key": "user:42", "deleted": true }
-```
-
-### Cache statistics
-
-```
-GET /cache/stats
-```
-
-Response `200 OK`:
-```json
-{
-  "hit_count": 12,
-  "miss_count": 3,
-  "lookup_count": 15,
-  "hit_rate": 0.8,
-  "entry_count": 7,
-  "overwrite_count": 1,
-  "evacuate_count": 0,
-  "expired_count": 0
-}
-```
+On first launch, WinnerProxy writes a default `config.yml` next to the executable. Edit it to point at your HRPAuth instance, then restart.
 
 ## Quick Example
 
-```bash
-# Set a value (60s TTL)
-curl -X POST http://localhost:2779/cache \
-  -H 'Content-Type: application/json' \
-  -d '{"key":"hello","value":"world","ttl_seconds":60}'
+Configure `config.yml`:
 
-# Get it back
-curl http://localhost:2779/cache/hello
-
-# Inspect stats
-curl http://localhost:2779/cache/stats
-
-# Delete it
-curl -X DELETE http://localhost:2779/cache/hello
+```yaml
+upstreams:
+  official:
+    enabled: true
+  hrpauth:
+    url: "http://127.0.0.1:2880"
+    manage_token: "<your HRPAuth manage.token>"
+    enabled: true
 ```
+
+Point your Minecraft server's `server.properties`:
+
+```properties
+online-mode=true
+yggdrasil-api-url=http://localhost:2779/yggdrasil
+```
+
+Done. Mojang players will get auto-registered into HRPAuth on first join; HRPAuth users keep their identity regardless of how they log in.
+
+## Documentation
+
+The full documentation lives in [`docs/wiki/`](./docs/wiki/):
+
+- [Architecture](./docs/wiki/architecture.md) — components, data flow, identity model
+- [Configuration](./docs/wiki/configuration.md) — every config key explained
+- [Deployment](./docs/wiki/deployment.md) — single instance, Docker, production checklist
+- [API Reference](./docs/wiki/api.md) — every endpoint
+- [Data Flow](./docs/wiki/data-flow.md) — the three-stage `hasJoined` in detail
+- [Troubleshooting](./docs/wiki/troubleshooting.md) — common issues
+
+Companion documents:
+
+- [HA Change Roadmap](./docs/HA-ROADMAP.md) — what HRPAuth needs to do to support this
+- [Development Roadmap](./docs/DEVELOPMENT-ROADMAP.md) — how WinnerProxy is being refactored
 
 ## License
 

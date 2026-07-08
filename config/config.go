@@ -130,13 +130,13 @@ func Default() *Config {
 				Enabled:    true,
 			},
 			YggdrasilAPI: UpstreamConfig{
-				URL:        "",
+				URL:        "https://backend.auth.samuelcheston.com/",
 				TimeoutSec: 10,
 				Enabled:    false,
 			},
 		},
 		Mapping: MappingConfig{
-			MojangToExternal: false,
+			MojangToExternal:  false,
 			ExternalServiceID: "yggdrasil",
 			AutoResolveName:   true,
 			AutoResolveUUID:   true,
