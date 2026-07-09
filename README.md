@@ -44,7 +44,7 @@ All binding, unbinding, cleanup, and direct database operations are HRPAuth's in
 ## Features
 
 - **Thin Yggdrasil proxy** — `hasJoined` / `profile/:uuid` / `api/profiles/minecraft` all transparently backed by HRPAuth
-- **Seamless Mojang → HRPAuth registration** — first-time Mojang players are auto-registered into HRPAuth (with `winnerproxy=1` and a placeholder email)
+- **Seamless Mojang → HRPAuth registration** — first-time Mojang players are auto-registered into HRPAuth (with `cbh=0` and a placeholder email)
 - **Single source of truth** — every in-game player identity is owned by HRPAuth, never by WinnerProxy
 - **Single static binary** — no DB, no Redis, no external dependencies
 - **Hot-configurable upstream** — Mojang and HRPAuth timeouts set in `config.yml`
