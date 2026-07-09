@@ -1,226 +1,179 @@
 package handler
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/winnerproxy/winnerproxy/internal/cache"
 	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
 	"github.com/winnerproxy/winnerproxy/internal/mapping"
 	"github.com/winnerproxy/winnerproxy/internal/proxy"
 )
 
-// ErrMultiAuth is returned when more than one upstream service claims
-// the same player in the legacy multi-upstream flow. Kept until P3
-// replaces HasJoined with the three-stage flow.
-var ErrMultiAuth = errors.New("multiple services returned profiles")
-
-// Handler dispatches Yggdrasil requests to upstream services. In P2 it
-// still uses the legacy "iterate + 409 on conflict" HasJoined; the
-// three-stage HA-first / Mojang-fallback / proxy-register flow is
-// introduced in P3.
+// Handler dispatches Yggdrasil requests. HasJoined follows the
+// three-stage flow (HRPAuth → Mojang → proxy-register); QueryProfile /
+// BatchQuery / YggdrasilRoot go directly to HRPAuth. Services and
+// Mapping are kept as fields only so P4's mapping-removal commit can
+// touch them in isolation.
 type Handler struct {
-	Cache    *cache.Cache
+	Hrpauth  *hrpauth.Client
 	Services []proxy.UpstreamService
 	Mapping  *mapping.Mapping
 }
 
-func New(c *cache.Cache, services []proxy.UpstreamService, m *mapping.Mapping) *Handler {
-	return &Handler{Cache: c, Services: services, Mapping: m}
+// New constructs a Handler. hrpauthCli is used for the three-stage
+// HasJoined and the direct HRPAuth calls in QueryProfile / BatchQuery /
+// YggdrasilRoot. services is used to locate the MojangService for
+// stage 2. m is held for P4 cleanup.
+func New(services []proxy.UpstreamService, hrpauthCli *hrpauth.Client, m *mapping.Mapping) *Handler {
+	return &Handler{Hrpauth: hrpauthCli, Services: services, Mapping: m}
 }
 
 func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (h *Handler) CacheGet(c *gin.Context) {
-	key := []byte(c.Param("key"))
-	val, err := h.Cache.Get(key)
-	if err != nil {
-		if errors.Is(err, cache.ErrCacheMiss) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "key not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.Data(http.StatusOK, "application/octet-stream", val)
-}
-
-type CacheSetRequest struct {
-	Key        string `json:"key" binding:"required"`
-	Value      string `json:"value" binding:"required"`
-	TTLSeconds int    `json:"ttl_seconds"`
-}
-
-func (h *Handler) CacheSet(c *gin.Context) {
-	var req CacheSetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if err := h.Cache.Set([]byte(req.Key), []byte(req.Value), req.TTLSeconds); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"key":         req.Key,
-		"ttl_seconds": req.TTLSeconds,
-		"expires_at":  expiryTime(req.TTLSeconds),
-	})
-}
-
-func (h *Handler) CacheDelete(c *gin.Context) {
-	key := []byte(c.Param("key"))
-	deleted := h.Cache.Delete(key)
-	c.JSON(http.StatusOK, gin.H{"key": string(key), "deleted": deleted})
-}
-
-func (h *Handler) CacheStats(c *gin.Context) {
-	c.JSON(http.StatusOK, h.Cache.Stats())
-}
-
+// HasJoined is the entry point for the Yggdrasil hasJoined query. The
+// query is passed through verbatim to HA so any future HA-side
+// parameters (e.g. ip) work without WinnerProxy changes.
+//
+// Three-stage flow:
+//  1. HA hasJoined — if HA returns 200, return HA's profile (HA skin).
+//  2. Mojang hasJoined — if Mojang returns 200, take the profile.
+//  3. Proxy-register — call HA POST /register with M.T. + Mojang UUID,
+//     return HA's profile_id as the player identity with Mojang skin.
 func (h *Handler) HasJoined(c *gin.Context) {
 	params := url.Values{}
 	for k, v := range c.Request.URL.Query() {
 		params[k] = v
 	}
 
-	services := h.Services
-	if len(services) == 0 {
+	// Stage 1: HA auth path.
+	profile, err := h.Hrpauth.HasJoined(params)
+	if err == nil && profile != nil {
+		c.JSON(http.StatusOK, profile)
+		return
+	}
+	if err != nil && !errors.Is(err, hrpauth.ErrNoProfile) {
+		// HA 5xx / network — log and continue to Mojang fallback.
+		log.Printf("hrpauth hasJoined error, falling back to mojang: %v", err)
+	}
+
+	// Stage 2: Mojang auth path.
+	mojang := h.findMojang()
+	if mojang == nil {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	mojangProfile, err := mojang.HasJoined(params)
+	if err != nil || mojangProfile == nil {
 		c.Status(http.StatusNoContent)
 		return
 	}
 
-	var results []struct {
-		Service *proxy.UpstreamService
-		Profile *hrpauth.PlayerProfile
-	}
-
-	for _, service := range services {
-		profile, err := service.HasJoined(params)
-		if err != nil {
-			if errors.Is(err, hrpauth.ErrNoProfile) {
-				continue
-			}
-			continue
-		}
-		results = append(results, struct {
-			Service *proxy.UpstreamService
-			Profile *hrpauth.PlayerProfile
-		}{&service, profile})
-	}
-
-	if len(results) == 0 {
-		c.Status(http.StatusNoContent)
-		return
-	}
-
-	if len(results) > 1 {
-		c.JSON(http.StatusConflict, gin.H{"error": ErrMultiAuth.Error()})
-		return
-	}
-
-	result := results[0]
-	transformed, err := h.Mapping.Transform(*result.Service, result.Profile)
+	// Stage 3: proxy-register in HA.
+	password, err := generatePassword()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("generate password failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth backend unavailable"})
 		return
 	}
-
-	c.JSON(http.StatusOK, transformed)
+	reg, err := h.Hrpauth.RegisterByProxy(mojangProfile.Name, mojangProfile.ID, password)
+	switch {
+	case errors.Is(err, hrpauth.ErrUsernameBound):
+		log.Printf("username_already_bound, rejecting mojang player: name=%s uuid=%s",
+			mojangProfile.Name, mojangProfile.ID)
+		c.Status(http.StatusNoContent)
+	case err != nil:
+		log.Printf("hrpauth register failed: %v", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth backend unavailable"})
+	default:
+		// Stage 3 success: HA identity (profile_id) + Mojang skin.
+		c.JSON(http.StatusOK, &hrpauth.PlayerProfile{
+			ID:         reg.ProfileID,
+			Name:       mojangProfile.Name,
+			Properties: mojangProfile.Properties,
+		})
+	}
 }
 
+// findMojang returns the MojangService from the upstream list, or nil
+// if the official Mojang upstream is disabled.
+func (h *Handler) findMojang() proxy.UpstreamService {
+	for _, s := range h.Services {
+		if s.ID() == "mojang" {
+			return s
+		}
+	}
+	return nil
+}
+
+// generatePassword returns a 16-byte random password encoded as
+// base64-URL (22 chars). Players never use this — HA only stores it.
+func generatePassword() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// QueryProfile fetches a profile by UUID directly from HRPAuth.
 func (h *Handler) QueryProfile(c *gin.Context) {
 	uuid := c.Param("uuid")
 	unsigned := true
 	if v := c.Query("unsigned"); v != "" {
 		unsigned, _ = strconv.ParseBool(v)
 	}
-
-	mappingData, err := h.Mapping.QueryByDownstreamUUID(uuid)
+	profile, err := h.Hrpauth.GetProfile(uuid, unsigned)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
 	}
-
-	services := h.Services
-	var service proxy.UpstreamService
-	for _, s := range services {
-		if s.ID() == mappingData.DeclaredYggdrasilTree {
-			service = s
-			break
-		}
-	}
-
-	if service == nil {
-		c.Status(http.StatusNotFound)
-		return
-	}
-
-	profile, err := service.QueryProfile(mappingData.UpstreamUUID, unsigned)
-	if err != nil {
-		c.Status(http.StatusNotFound)
-		return
-	}
-
-	c.JSON(http.StatusOK, &hrpauth.PlayerProfile{
-		ID:         mappingData.DownstreamUUID,
-		Name:       mappingData.DownstreamName,
-		Properties: profile.Properties,
-	})
+	c.JSON(http.StatusOK, profile)
 }
 
+// BatchQuery forwards a list of usernames directly to HRPAuth. Only
+// {id, name} summary is returned; textures properties are dropped per
+// Yggdrasil convention.
 func (h *Handler) BatchQuery(c *gin.Context) {
 	var names []string
 	if err := json.NewDecoder(c.Request.Body).Decode(&names); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	profiles, err := h.Hrpauth.BatchQuery(names)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	type profileResult struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
-
-	var results []profileResult
-	for _, name := range names {
-		services := h.Services
-		for _, service := range services {
-			profiles, err := service.BatchQuery([]string{name})
-			if err != nil || len(profiles) == 0 {
-				continue
-			}
-			transformed, err := h.Mapping.Transform(service, profiles[0])
-			if err != nil {
-				continue
-			}
-			results = append(results, profileResult{
-				ID:   transformed.ID,
-				Name: transformed.Name,
-			})
-			break
-		}
+	out := make([]profileResult, 0, len(profiles))
+	for _, p := range profiles {
+		out = append(out, profileResult{ID: p.ID, Name: p.Name})
 	}
-
-	c.JSON(http.StatusOK, results)
+	c.JSON(http.StatusOK, out)
 }
 
+// YggdrasilRoot is the meta endpoint served at "/" and "/yggdrasil".
+// It passes through HA's root response so the Minecraft client gets
+// HA's real skinDomains / signaturePublickey. On HA failure it
+// returns a minimal {skinDomains: []} so legacy probes still succeed.
 func (h *Handler) YggdrasilRoot(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"skinDomains": []string{},
-	})
-}
-
-func expiryTime(ttlSeconds int) string {
-	if ttlSeconds <= 0 {
-		return "never"
+	meta, err := h.Hrpauth.GetServerMeta()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"skinDomains": []string{}})
+		return
 	}
-	return time.Now().Add(time.Duration(ttlSeconds) * time.Second).UTC().Format(time.RFC3339)
+	c.JSON(http.StatusOK, meta)
 }

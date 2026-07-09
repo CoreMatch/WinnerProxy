@@ -46,7 +46,7 @@ func main() {
 	m := mapping.New(c, cfg, services)
 	log.Printf("mapping initialized with %d services", len(services))
 
-	h := handler.New(c, services, m)
+	h := handler.New(services, hrpauthCli, m)
 	engine := router.New(h)
 
 	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)

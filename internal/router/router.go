@@ -17,14 +17,6 @@ func New(h *handler.Handler) *gin.Engine {
 	r.GET("/", h.YggdrasilRoot)
 	r.GET("/yggdrasil", h.YggdrasilRoot)
 
-	cacheGroup := r.Group("/cache")
-	{
-		cacheGroup.GET("/:key", h.CacheGet)
-		cacheGroup.POST("", h.CacheSet)
-		cacheGroup.DELETE("/:key", h.CacheDelete)
-		cacheGroup.GET("/stats", h.CacheStats)
-	}
-
 	yggdrasilGroup := r.Group("/yggdrasil")
 	{
 		yggdrasilGroup.GET("/sessionserver/session/minecraft/hasJoined", h.HasJoined)

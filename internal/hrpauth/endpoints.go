@@ -151,3 +151,28 @@ func decodeErrorBody(r io.Reader) string {
 	_ = json.NewDecoder(r).Decode(&eb)
 	return eb.Error
 }
+
+// GetServerMeta fetches HA's Yggdrasil root metadata (skinDomains,
+// signaturePublickey, etc). WinnerProxy exposes this at "/" and
+// "/yggdrasil" so legacy Mojang clients that probe the root still
+// receive a valid Yggdrasil response.
+//
+//	200 + body   → map (raw JSON), nil
+//	network err  → nil, ErrUpstream
+//	other status → nil, ErrUpstream
+func (c *Client) GetServerMeta() (map[string]any, error) {
+	resp, err := c.doGet("/", "")
+	if err != nil {
+		return nil, ErrUpstream
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, ErrUpstream
+	}
+	var meta map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+		return nil, ErrUpstream
+	}
+	return meta, nil
+}
