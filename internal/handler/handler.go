@@ -11,22 +11,28 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/winnerproxy/winnerproxy/internal/cache"
+	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
 	"github.com/winnerproxy/winnerproxy/internal/mapping"
 	"github.com/winnerproxy/winnerproxy/internal/proxy"
 )
 
-var (
-	ErrMultiAuth = errors.New("multiple services returned profiles")
-)
+// ErrMultiAuth is returned when more than one upstream service claims
+// the same player in the legacy multi-upstream flow. Kept until P3
+// replaces HasJoined with the three-stage flow.
+var ErrMultiAuth = errors.New("multiple services returned profiles")
 
+// Handler dispatches Yggdrasil requests to upstream services. In P2 it
+// still uses the legacy "iterate + 409 on conflict" HasJoined; the
+// three-stage HA-first / Mojang-fallback / proxy-register flow is
+// introduced in P3.
 type Handler struct {
-	Cache   *cache.Cache
-	Proxy   *proxy.Proxy
-	Mapping *mapping.Mapping
+	Cache    *cache.Cache
+	Services []proxy.UpstreamService
+	Mapping  *mapping.Mapping
 }
 
-func New(c *cache.Cache, p *proxy.Proxy, m *mapping.Mapping) *Handler {
-	return &Handler{Cache: c, Proxy: p, Mapping: m}
+func New(c *cache.Cache, services []proxy.UpstreamService, m *mapping.Mapping) *Handler {
+	return &Handler{Cache: c, Services: services, Mapping: m}
 }
 
 func (h *Handler) Health(c *gin.Context) {
@@ -48,9 +54,9 @@ func (h *Handler) CacheGet(c *gin.Context) {
 }
 
 type CacheSetRequest struct {
-	Key   string `json:"key" binding:"required"`
-	Value string `json:"value" binding:"required"`
-	TTLSeconds int `json:"ttl_seconds"`
+	Key        string `json:"key" binding:"required"`
+	Value      string `json:"value" binding:"required"`
+	TTLSeconds int    `json:"ttl_seconds"`
 }
 
 func (h *Handler) CacheSet(c *gin.Context) {
@@ -86,7 +92,7 @@ func (h *Handler) HasJoined(c *gin.Context) {
 		params[k] = v
 	}
 
-	services := h.Proxy.GetServices()
+	services := h.Services
 	if len(services) == 0 {
 		c.Status(http.StatusNoContent)
 		return
@@ -94,20 +100,20 @@ func (h *Handler) HasJoined(c *gin.Context) {
 
 	var results []struct {
 		Service *proxy.UpstreamService
-		Profile *proxy.PlayerProfile
+		Profile *hrpauth.PlayerProfile
 	}
 
 	for _, service := range services {
 		profile, err := service.HasJoined(params)
 		if err != nil {
-			if errors.Is(err, proxy.ErrNoProfile) {
+			if errors.Is(err, hrpauth.ErrNoProfile) {
 				continue
 			}
 			continue
 		}
 		results = append(results, struct {
 			Service *proxy.UpstreamService
-			Profile *proxy.PlayerProfile
+			Profile *hrpauth.PlayerProfile
 		}{&service, profile})
 	}
 
@@ -144,7 +150,7 @@ func (h *Handler) QueryProfile(c *gin.Context) {
 		return
 	}
 
-	services := h.Proxy.GetServices()
+	services := h.Services
 	var service proxy.UpstreamService
 	for _, s := range services {
 		if s.ID() == mappingData.DeclaredYggdrasilTree {
@@ -164,7 +170,7 @@ func (h *Handler) QueryProfile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, &proxy.PlayerProfile{
+	c.JSON(http.StatusOK, &hrpauth.PlayerProfile{
 		ID:         mappingData.DownstreamUUID,
 		Name:       mappingData.DownstreamName,
 		Properties: profile.Properties,
@@ -185,7 +191,7 @@ func (h *Handler) BatchQuery(c *gin.Context) {
 
 	var results []profileResult
 	for _, name := range names {
-		services := h.Proxy.GetServices()
+		services := h.Services
 		for _, service := range services {
 			profiles, err := service.BatchQuery([]string{name})
 			if err != nil || len(profiles) == 0 {
