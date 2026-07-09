@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"github.com/winnerproxy/winnerproxy/config"
-	"github.com/winnerproxy/winnerproxy/internal/cache"
 	"github.com/winnerproxy/winnerproxy/internal/handler"
 	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
-	"github.com/winnerproxy/winnerproxy/internal/mapping"
 	"github.com/winnerproxy/winnerproxy/internal/proxy"
 	"github.com/winnerproxy/winnerproxy/internal/router"
 )
@@ -28,25 +26,19 @@ func main() {
 	cfg := config.Load(cfgPath)
 	log.Printf("config loaded: %s", cfgPath)
 
-	c := cache.New(cfg.Cache.Size)
-	log.Printf("freecache initialized: %d bytes", cfg.Cache.Size)
-
 	// TODO(P6): wire from cfg.Upstreams.Hrpauth
 	hrpauthCli := hrpauth.New("", "", nil)
+
 	services := []proxy.UpstreamService{
 		proxy.NewHrpauthService(hrpauthCli),
 	}
-
 	if cfg.Upstreams.Official.Enabled {
 		mojang := proxy.NewMojangService(time.Duration(cfg.Upstreams.Official.TimeoutSec) * time.Second)
 		services = append(services, mojang)
 		log.Printf("mojang upstream enabled (timeout=%ds)", cfg.Upstreams.Official.TimeoutSec)
 	}
 
-	m := mapping.New(c, cfg, services)
-	log.Printf("mapping initialized with %d services", len(services))
-
-	h := handler.New(services, hrpauthCli, m)
+	h := handler.New(services, hrpauthCli)
 	engine := router.New(h)
 
 	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)

@@ -13,27 +13,23 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
-	"github.com/winnerproxy/winnerproxy/internal/mapping"
 	"github.com/winnerproxy/winnerproxy/internal/proxy"
 )
 
 // Handler dispatches Yggdrasil requests. HasJoined follows the
 // three-stage flow (HRPAuth → Mojang → proxy-register); QueryProfile /
-// BatchQuery / YggdrasilRoot go directly to HRPAuth. Services and
-// Mapping are kept as fields only so P4's mapping-removal commit can
-// touch them in isolation.
+// BatchQuery / YggdrasilRoot go directly to HRPAuth.
 type Handler struct {
 	Hrpauth  *hrpauth.Client
 	Services []proxy.UpstreamService
-	Mapping  *mapping.Mapping
 }
 
 // New constructs a Handler. hrpauthCli is used for the three-stage
 // HasJoined and the direct HRPAuth calls in QueryProfile / BatchQuery /
 // YggdrasilRoot. services is used to locate the MojangService for
-// stage 2. m is held for P4 cleanup.
-func New(services []proxy.UpstreamService, hrpauthCli *hrpauth.Client, m *mapping.Mapping) *Handler {
-	return &Handler{Hrpauth: hrpauthCli, Services: services, Mapping: m}
+// stage 2.
+func New(services []proxy.UpstreamService, hrpauthCli *hrpauth.Client) *Handler {
+	return &Handler{Hrpauth: hrpauthCli, Services: services}
 }
 
 func (h *Handler) Health(c *gin.Context) {
