@@ -118,7 +118,7 @@ func Default() *Config {
 				Enabled:    true,
 			},
 			Hrpauth: HrpauthConfig{
-				URL:         "http://127.0.0.1:2880",
+				URL:         "http://127.0.0.1:2778",
 				ManageToken: "",
 				TimeoutSec:  10,
 				Enabled:     true,
