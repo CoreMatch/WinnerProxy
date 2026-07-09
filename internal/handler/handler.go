@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/winnerproxy/winnerproxy/internal/cache"
 	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
 	"github.com/winnerproxy/winnerproxy/internal/proxy"
 )
@@ -22,14 +23,19 @@ import (
 type Handler struct {
 	Hrpauth  *hrpauth.Client
 	Services []proxy.UpstreamService
+	Cache    cache.ProfileCache
 }
 
 // New constructs a Handler. hrpauthCli is used for the three-stage
 // HasJoined and the direct HRPAuth calls in QueryProfile / BatchQuery /
 // YggdrasilRoot. services is used to locate the MojangService for
-// stage 2.
-func New(services []proxy.UpstreamService, hrpauthCli *hrpauth.Client) *Handler {
-	return &Handler{Hrpauth: hrpauthCli, Services: services}
+// stage 2. c is consulted for HA profile (uuid-keyed) and Mojang
+// profile (username-keyed) caching; pass cache.NewNoop() to disable.
+func New(services []proxy.UpstreamService, hrpauthCli *hrpauth.Client, c cache.ProfileCache) *Handler {
+	if c == nil {
+		c = cache.NewNoop()
+	}
+	return &Handler{Hrpauth: hrpauthCli, Services: services, Cache: c}
 }
 
 func (h *Handler) Health(c *gin.Context) {
@@ -54,6 +60,9 @@ func (h *Handler) HasJoined(c *gin.Context) {
 	// Stage 1: HA auth path.
 	profile, err := h.Hrpauth.HasJoined(params)
 	if err == nil && profile != nil {
+		// Warm the HA profile cache so subsequent QueryProfile /
+		// QueryProfile-by-uuid calls can short-circuit.
+		_ = h.Cache.SetHAProfile(profile.ID, profile)
 		c.JSON(http.StatusOK, profile)
 		return
 	}
@@ -62,7 +71,38 @@ func (h *Handler) HasJoined(c *gin.Context) {
 		log.Printf("hrpauth hasJoined error, falling back to mojang: %v", err)
 	}
 
-	// Stage 2: Mojang auth path.
+	username := c.Query("username")
+	// Stage 2: Mojang auth path. Check the cache first so repeated
+	// join attempts for the same username within the TTL avoid a
+	// Mojang roundtrip.
+	if username != "" {
+		if cached, ok := h.Cache.GetMojangProfile(username); ok {
+			password, perr := generatePassword()
+			if perr != nil {
+				log.Printf("generate password failed: %v", perr)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "auth backend unavailable"})
+				return
+			}
+			reg, rerr := h.Hrpauth.RegisterByProxy(cached.Name, cached.ID, password)
+			switch {
+			case errors.Is(rerr, hrpauth.ErrUsernameBound):
+				log.Printf("username_already_bound, rejecting mojang player: name=%s uuid=%s",
+					cached.Name, cached.ID)
+				c.Status(http.StatusNoContent)
+			case rerr != nil:
+				log.Printf("hrpauth register failed: %v", rerr)
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth backend unavailable"})
+			default:
+				c.JSON(http.StatusOK, &hrpauth.PlayerProfile{
+					ID:         reg.ProfileID,
+					Name:       cached.Name,
+					Properties: cached.Properties,
+				})
+			}
+			return
+		}
+	}
+
 	mojang := h.findMojang()
 	if mojang == nil {
 		c.Status(http.StatusNoContent)
@@ -72,6 +112,11 @@ func (h *Handler) HasJoined(c *gin.Context) {
 	if err != nil || mojangProfile == nil {
 		c.Status(http.StatusNoContent)
 		return
+	}
+
+	// Cache the positive Mojang response for subsequent attempts.
+	if mojangProfile.Name != "" {
+		_ = h.Cache.SetMojangProfile(mojangProfile.Name, mojangProfile)
 	}
 
 	// Stage 3: proxy-register in HA.
@@ -121,18 +166,25 @@ func generatePassword() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// QueryProfile fetches a profile by UUID directly from HRPAuth.
+// QueryProfile fetches a profile by UUID. The HA profile cache is
+// consulted first; on miss the request is forwarded to HRPAuth and
+// the result is warmed into the cache.
 func (h *Handler) QueryProfile(c *gin.Context) {
 	uuid := c.Param("uuid")
 	unsigned := true
 	if v := c.Query("unsigned"); v != "" {
 		unsigned, _ = strconv.ParseBool(v)
 	}
+	if cached, ok := h.Cache.GetHAProfile(uuid); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
 	profile, err := h.Hrpauth.GetProfile(uuid, unsigned)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
 	}
+	_ = h.Cache.SetHAProfile(uuid, profile)
 	c.JSON(http.StatusOK, profile)
 }
 

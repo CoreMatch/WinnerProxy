@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/winnerproxy/winnerproxy/config"
+	"github.com/winnerproxy/winnerproxy/internal/cache"
 	"github.com/winnerproxy/winnerproxy/internal/handler"
 	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
 	"github.com/winnerproxy/winnerproxy/internal/proxy"
@@ -60,7 +61,7 @@ func main() {
 		log.Printf("mojang upstream enabled (timeout=%ds)", cfg.Upstreams.Official.TimeoutSec)
 	}
 
-	h := handler.New(services, hrpauthCli)
+	h := handler.New(services, hrpauthCli, buildCache(cfg.Cache))
 	engine := router.New(h)
 
 	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)
@@ -134,6 +135,20 @@ func isTerminal(f *os.File) bool {
 		return false
 	}
 	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// buildCache returns a ProfileCache from config. size=0 yields the
+// noop cache; otherwise a freecache-backed instance is constructed.
+func buildCache(cfg config.CacheConfig) cache.ProfileCache {
+	if cfg.Size <= 0 {
+		log.Printf("profile cache disabled (cache.size=0)")
+		return cache.NewNoop()
+	}
+	ttl := time.Duration(cfg.TTLSec) * time.Second
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	return cache.NewFreeCache(cfg.Size, ttl)
 }
 
 func configPath() (string, error) {

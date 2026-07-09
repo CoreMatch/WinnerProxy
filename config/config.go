@@ -14,6 +14,8 @@ import (
 type Config struct {
 	// Server controls the HTTP listener.
 	Server ServerConfig `yaml:"server"`
+	// Cache controls the in-process profile cache.
+	Cache CacheConfig `yaml:"cache"`
 	// Log controls log output behavior.
 	Log LogConfig `yaml:"log"`
 	// Upstreams groups all upstream Mojang / HRPAuth endpoints.
@@ -42,6 +44,15 @@ type LogConfig struct {
 	Level string `yaml:"level"`
 	// Format is "text" or "json".
 	Format string `yaml:"format"`
+}
+
+// CacheConfig configures the in-process profile cache (freecache).
+// Set Size=0 to disable caching entirely.
+type CacheConfig struct {
+	// Size is the maximum cache size in bytes. Default 100 MiB.
+	Size int `yaml:"size"`
+	// TTLSec is how long a profile stays in the cache. Default 300s.
+	TTLSec int `yaml:"ttl_sec"`
 }
 
 // SiteConfig is non-runtime metadata about this deployment.
@@ -95,6 +106,10 @@ func Default() *Config {
 		Log: LogConfig{
 			Level:  "info",
 			Format: "text",
+		},
+		Cache: CacheConfig{
+			Size:   100 * 1024 * 1024, // 100 MiB
+			TTLSec: 300,                // 5 minutes
 		},
 		Upstreams: UpstreamsConfig{
 			Official: UpstreamConfig{
