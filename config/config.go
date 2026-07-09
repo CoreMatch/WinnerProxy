@@ -1,3 +1,7 @@
+// Package config loads WinnerProxy's runtime configuration from a YAML
+// file. Fields are grouped into nested sections so the on-disk
+// structure mirrors the example layout in
+// docs/DEVELOPMENT-ROADMAP §8.3.
 package config
 
 import (
@@ -7,21 +11,13 @@ import (
 )
 
 // Config holds runtime configuration loaded from a YAML file.
-// Fields are grouped into nested sections so the on-disk structure
-// mirrors the example layout (server / cache / log / proxy ...).
 type Config struct {
 	// Server controls the HTTP listener.
 	Server ServerConfig `yaml:"server"`
-	// Cache controls the in-memory freecache instance.
-	Cache CacheConfig `yaml:"cache"`
 	// Log controls log output behavior.
 	Log LogConfig `yaml:"log"`
-	// Proxy controls the upstream / callback behavior.
-	Proxy ProxyConfig `yaml:"proxy"`
-	// Upstreams groups all upstream Mojang / Yggdrasil endpoints.
+	// Upstreams groups all upstream Mojang / HRPAuth endpoints.
 	Upstreams UpstreamsConfig `yaml:"upstreams"`
-	// Mapping controls player identity mapping behavior.
-	Mapping MappingConfig `yaml:"mapping"`
 	// Site holds non-runtime metadata about the deployment.
 	Site SiteConfig `yaml:"site"`
 	// Version is the schema version of this config file.
@@ -33,19 +29,11 @@ type ServerConfig struct {
 	// Addr is the address the engine binds to, e.g. ":2779".
 	Addr string `yaml:"addr"`
 	// ReadTimeoutSec is the maximum duration in seconds for reading
-	// the entire request, including the body. Zero means no timeout.
+	// the entire request, including the body.
 	ReadTimeoutSec int `yaml:"read_timeout_sec"`
 	// WriteTimeoutSec is the maximum duration in seconds for writing
-	// the response. Zero means no timeout.
+	// the response.
 	WriteTimeoutSec int `yaml:"write_timeout_sec"`
-}
-
-// CacheConfig configures the freecache-backed store.
-type CacheConfig struct {
-	// Size is the freecache size in bytes.
-	Size int `yaml:"size"`
-	// GCIntervalSec controls how often expired entries are swept.
-	GCIntervalSec int `yaml:"gc_interval_sec"`
 }
 
 // LogConfig configures the process logger.
@@ -56,14 +44,6 @@ type LogConfig struct {
 	Format string `yaml:"format"`
 }
 
-// ProxyConfig configures the upstream / callback behavior.
-type ProxyConfig struct {
-	// CallbackURL is the upstream endpoint the proxy talks to.
-	CallbackURL string `yaml:"callback_url"`
-	// TimeoutSec is the upstream request timeout in seconds.
-	TimeoutSec int `yaml:"timeout_sec"`
-}
-
 // SiteConfig is non-runtime metadata about this deployment.
 type SiteConfig struct {
 	// Name is the human-readable service name.
@@ -72,23 +52,24 @@ type SiteConfig struct {
 	Version string `yaml:"version"`
 }
 
-// MappingConfig controls player identity mapping behavior.
-type MappingConfig struct {
-	// MojangToExternal enables mapping Mojang authenticated players to external service identities.
-	MojangToExternal bool `yaml:"mojang_to_external"`
-	// ExternalServiceID is the ID of the external service to map to when MojangToExternal is enabled.
-	ExternalServiceID string `yaml:"external_service_id"`
-	// AutoResolveName enables automatic name conflict resolution.
-	AutoResolveName bool `yaml:"auto_resolve_name"`
-	// AutoResolveUUID enables automatic UUID conflict resolution.
-	AutoResolveUUID bool `yaml:"auto_resolve_uuid"`
-}
-
-// UpstreamConfig describes a single upstream endpoint the proxy can
-// route requests to.
+// UpstreamConfig describes a generic upstream endpoint.
 type UpstreamConfig struct {
 	// URL is the upstream base URL.
 	URL string `yaml:"url"`
+	// TimeoutSec is the per-request timeout in seconds.
+	TimeoutSec int `yaml:"timeout_sec"`
+	// Enabled toggles whether this upstream is active.
+	Enabled bool `yaml:"enabled"`
+}
+
+// HrpauthConfig is the HRPAuth-specific upstream config. The
+// ManageToken must match HRPAuth's config.yaml > manage.token.
+type HrpauthConfig struct {
+	// URL is the HRPAuth base URL.
+	URL string `yaml:"url"`
+	// ManageToken is the M.T. sent as the remember_token body field on
+	// every M.T.-authenticated /register call.
+	ManageToken string `yaml:"manage_token"`
 	// TimeoutSec is the per-request timeout in seconds.
 	TimeoutSec int `yaml:"timeout_sec"`
 	// Enabled toggles whether this upstream is active.
@@ -99,8 +80,8 @@ type UpstreamConfig struct {
 type UpstreamsConfig struct {
 	// Official is the upstream for the official Mojang services.
 	Official UpstreamConfig `yaml:"official"`
-	// YggdrasilAPI is the upstream for the Yggdrasil authentication API.
-	YggdrasilAPI UpstreamConfig `yaml:"yggdrasilapi"`
+	// Hrpauth is the upstream for the HRPAuth (HA) backend.
+	Hrpauth HrpauthConfig `yaml:"hrpauth"`
 }
 
 // Default returns the built-in default configuration.
@@ -111,17 +92,9 @@ func Default() *Config {
 			ReadTimeoutSec:  15,
 			WriteTimeoutSec: 15,
 		},
-		Cache: CacheConfig{
-			Size:          100 * 1024 * 1024, // 100 MB
-			GCIntervalSec: 60,
-		},
 		Log: LogConfig{
 			Level:  "info",
 			Format: "text",
-		},
-		Proxy: ProxyConfig{
-			CallbackURL: "",
-			TimeoutSec:  10,
 		},
 		Upstreams: UpstreamsConfig{
 			Official: UpstreamConfig{
@@ -129,23 +102,18 @@ func Default() *Config {
 				TimeoutSec: 10,
 				Enabled:    true,
 			},
-			YggdrasilAPI: UpstreamConfig{
-				URL:        "https://backend.auth.samuelcheston.com/",
-				TimeoutSec: 10,
-				Enabled:    false,
+			Hrpauth: HrpauthConfig{
+				URL:         "http://127.0.0.1:2880",
+				ManageToken: "",
+				TimeoutSec:  10,
+				Enabled:     true,
 			},
-		},
-		Mapping: MappingConfig{
-			MojangToExternal:  false,
-			ExternalServiceID: "yggdrasil",
-			AutoResolveName:   true,
-			AutoResolveUUID:   true,
 		},
 		Site: SiteConfig{
 			Name:    "WinnerProxy",
-			Version: "0.1.0",
+			Version: "0.2.0",
 		},
-		Version: "1",
+		Version: "2",
 	}
 }
 
