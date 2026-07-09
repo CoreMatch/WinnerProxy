@@ -35,7 +35,7 @@ func TestNew_NilDoerDefaultsToHTTPClient(t *testing.T) {
 
 func TestHasJoined_200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/yggdrasil/sessionserver/session/minecraft/hasJoined" {
+		if r.URL.Path != "/sessionserver/session/minecraft/hasJoined" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("username"); got != "alice" {
@@ -84,6 +84,27 @@ func TestHasJoined_204(t *testing.T) {
 	_, err := c.HasJoined(url.Values{"username": {"bob"}})
 	if err != ErrNoProfile {
 		t.Fatalf("expected ErrNoProfile, got %v", err)
+	}
+}
+
+// TestHasJoined_200_EmptyBody covers HA's "not found" shape: 200 OK
+// with an empty JSON object {}. The client must surface this as
+// ErrNoProfile (matching the 204 path) rather than returning a
+// zero-value profile to the game server.
+func TestHasJoined_200_EmptyBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, "{}")
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	got, err := c.HasJoined(url.Values{"username": {"bob"}})
+	if err != ErrNoProfile {
+		t.Fatalf("expected ErrNoProfile, got err=%v profile=%+v", err, got)
+	}
+	if got != nil {
+		t.Fatalf("expected nil profile, got %+v", got)
 	}
 }
 

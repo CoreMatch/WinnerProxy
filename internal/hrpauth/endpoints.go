@@ -10,12 +10,17 @@ import (
 // is passed through verbatim so any future HA-side parameters (e.g. ip)
 // are supported without WinnerProxy changes.
 //
+// HA's router does NOT use a /yggdrasil prefix — it serves the
+// Yggdrasil API at the prefix-less path (see
+// HRPAuth-Backend-Go/main.go:106-127).
+//
 //	200 + body   → *PlayerProfile, nil
+//	200 + {}     → nil, ErrNoProfile   (HA's "not found" shape)
 //	204          → nil, ErrNoProfile
 //	network err  → nil, ErrUpstream
 //	other status → nil, ErrUpstream
 func (c *Client) HasJoined(q url.Values) (*PlayerProfile, error) {
-	resp, err := c.doGet("/yggdrasil/sessionserver/session/minecraft/hasJoined", q.Encode())
+	resp, err := c.doGet("/sessionserver/session/minecraft/hasJoined", q.Encode())
 	if err != nil {
 		return nil, ErrUpstream
 	}
@@ -26,6 +31,13 @@ func (c *Client) HasJoined(q url.Values) (*PlayerProfile, error) {
 		var p PlayerProfile
 		if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 			return nil, ErrUpstream
+		}
+		// HA returns 200 + {} when the profile or matching session is
+		// not found (see HRPAuth controllers/yggdrasil_controller.go
+		// HasJoined). The zero-value PlayerProfile would otherwise leak
+		// to the game server as a "successful" but empty identity.
+		if p.ID == "" {
+			return nil, ErrNoProfile
 		}
 		return &p, nil
 	case 204:
@@ -48,7 +60,7 @@ func (c *Client) GetProfile(uuid string, unsigned bool) (*PlayerProfile, error) 
 	if unsigned {
 		q.Set("unsigned", "true")
 	}
-	resp, err := c.doGet("/yggdrasil/sessionserver/session/minecraft/profile/"+uuid, q.Encode())
+	resp, err := c.doGet("/sessionserver/session/minecraft/profile/"+uuid, q.Encode())
 	if err != nil {
 		return nil, ErrUpstream
 	}

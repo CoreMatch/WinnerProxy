@@ -73,7 +73,7 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 	t.Helper()
 	ha := &fakeHA{}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/yggdrasil/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		ha.hasJoinCalls.Add(1)
 		if ha.hasJoin != nil {
 			ha.hasJoin(w, r)
@@ -81,7 +81,7 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/yggdrasil/sessionserver/session/minecraft/profile/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/sessionserver/session/minecraft/profile/", func(w http.ResponseWriter, r *http.Request) {
 		ha.getProfCalls.Add(1)
 		if ha.getProf != nil {
 			ha.getProf(w, r)
@@ -89,7 +89,7 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		ha.batchCalls.Add(1)
 		if ha.batch != nil {
 			ha.batch(w, r)
@@ -351,6 +351,51 @@ func TestHasJoinedStage1ErrorStage2Success(t *testing.T) {
 	w := doRequest(eng, http.MethodGet, hasJoinedURL("bob"), "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d, body: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestHasJoinedStage1EmptyBodyStage2Success covers HA's "not found"
+// shape: 200 OK with body `{}`. The handler must treat this as a
+// miss, fall through to the Mojang stage, and ultimately return the
+// proxy-registered profile (HA identity + Mojang skin). It must NOT
+// return the zero-value profile to the game server.
+func TestHasJoinedStage1EmptyBodyStage2Success(t *testing.T) {
+	ha, srv := newFakeHA(t)
+	ha.hasJoin = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}
+	mj := &fakeMojang{hasJoinedFn: func(url.Values) (*hrpauth.PlayerProfile, error) {
+		return &hrpauth.PlayerProfile{
+			ID:   "moj-uuid-1",
+			Name: "carol",
+			Properties: []hrpauth.PlayerProperty{
+				{Name: "textures", Value: "moj-skin", Signature: "sig"},
+			},
+		}, nil
+	}}
+	ha.register = func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(hrpauth.RegisterResponse{ProfileID: "ha-pid-empty"})
+	}
+	c := newCache()
+	eng := buildRouter(t, srv, mj, c)
+
+	w := doRequest(eng, http.MethodGet, hasJoinedURL("carol"), "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: %d, want 200, body=%s", w.Code, w.Body.String())
+	}
+	var p hrpauth.PlayerProfile
+	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if p.ID != "ha-pid-empty" {
+		t.Errorf("id: got %q want ha-pid-empty", p.ID)
+	}
+	if p.Name != "carol" {
+		t.Errorf("name: got %q want carol", p.Name)
+	}
+	if len(p.Properties) != 1 || p.Properties[0].Value != "moj-skin" {
+		t.Errorf("expected mojang skin passthrough, got %+v", p.Properties)
 	}
 }
 
