@@ -28,7 +28,7 @@ type Config struct {
 
 // ServerConfig is the HTTP listener configuration.
 type ServerConfig struct {
-	// Addr is the address the engine binds to, e.g. ":2779".
+	// Addr is the address the engine binds to, e.g. ":2777".
 	Addr string `yaml:"addr"`
 	// ReadTimeoutSec is the maximum duration in seconds for reading
 	// the entire request, including the body.
@@ -99,7 +99,7 @@ type UpstreamsConfig struct {
 func Default() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Addr:            ":2779",
+			Addr:            ":2777",
 			ReadTimeoutSec:  15,
 			WriteTimeoutSec: 15,
 		},

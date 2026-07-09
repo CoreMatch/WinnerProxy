@@ -48,7 +48,7 @@ $EDITOR ./config.yml   # 填 upstreams.hrpauth.manage_token
 
 # 4. Minecraft server.properties
 online-mode=true
-yggdrasil-api-url=http://localhost:2779/yggdrasil
+yggdrasil-api-url=http://localhost:2777/yggdrasil
 
 # 5. 重新启动
 ./build/winnerproxy
@@ -58,7 +58,7 @@ yggdrasil-api-url=http://localhost:2779/yggdrasil
 
 ```yaml
 server:
-  addr: ":2779"
+  addr: ":2777"
 
 cache:
   size: 104857600        # 100 MiB
@@ -68,7 +68,7 @@ upstreams:
   official:
     enabled: true        # Mojang 兜底
   hrpauth:
-    url: "http://127.0.0.1:2880"
+    url: "http://127.0.0.1:2778"
     manage_token: "<your HRPAuth manage.token>"
     enabled: true
 ```
@@ -123,7 +123,7 @@ $EDITOR ./config.yml   # fill upstreams.hrpauth.manage_token
 
 # 4. Minecraft server.properties
 online-mode=true
-yggdrasil-api-url=http://localhost:2779/yggdrasil
+yggdrasil-api-url=http://localhost:2777/yggdrasil
 
 # 5. Restart
 ./build/winnerproxy
@@ -133,7 +133,7 @@ yggdrasil-api-url=http://localhost:2779/yggdrasil
 
 ```yaml
 server:
-  addr: ":2779"
+  addr: ":2777"
 
 cache:
   size: 104857600        # 100 MiB
@@ -143,7 +143,7 @@ upstreams:
   official:
     enabled: true        # Mojang fallback
   hrpauth:
-    url: "http://127.0.0.1:2880"
+    url: "http://127.0.0.1:2778"
     manage_token: "<your HRPAuth manage.token>"
     enabled: true
 ```
