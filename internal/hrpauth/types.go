@@ -30,6 +30,7 @@ type RegisterRequest struct {
 	Email         string `json:"email"`
 	MojangUUID    string `json:"mojang_uuid,omitempty"`
 	RememberToken string `json:"remember_token,omitempty"`
+	AuthType      string `json:"auth_type,omitempty"`
 }
 
 // RegisterResponse is what HA returns on a successful POST /register.
@@ -41,4 +42,25 @@ type RegisterResponse struct {
 	Message   string `json:"message"`
 	ProfileID string `json:"profile_id"`
 	CBH       int    `json:"cbh,omitempty"`
+}
+
+// DeclareEmailRequest is the body for POST /user/declare-email.
+type DeclareEmailRequest struct {
+	MT         string `json:"mt"`
+	Email      string `json:"email"`
+	PlayerName string `json:"playername"`
+}
+
+// EnableMojangBindRequest is the body for POST /user/mojang-bind-enable.
+type EnableMojangBindRequest struct {
+	RememberToken string `json:"remember_token"`
+	UID           string `json:"uid,omitempty"`
+	Email         string `json:"email,omitempty"`
+	AuthType      string `json:"auth_type"`
+}
+
+// CommonResponse is a generic HA response shape.
+type CommonResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }

@@ -262,6 +262,9 @@ func TestRegisterByProxy_200(t *testing.T) {
 	if gotBody.RememberToken != "test-manage-token" {
 		t.Errorf("M.T. not injected: %q", gotBody.RememberToken)
 	}
+	if gotBody.AuthType != "manage" {
+		t.Errorf("AuthType not injected: %q", gotBody.AuthType)
+	}
 	if gotBody.Username != "alice" || gotBody.MojangUUID != "f7c77d999f154a66a87dc4a51ef30d19" {
 		t.Errorf("body fields wrong: %+v", gotBody)
 	}

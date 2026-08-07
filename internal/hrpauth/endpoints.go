@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/url"
+	"strconv"
 )
 
 // HasJoined forwards the Yggdrasil hasJoined request to HA. The query
@@ -122,6 +123,7 @@ func (c *Client) RegisterByProxy(username, mojangUUID, password string) (*Regist
 		Email:         "", // HA auto-fills placeholder in M.T. path
 		MojangUUID:    mojangUUID,
 		RememberToken: c.manageToken,
+		AuthType:      "manage",
 	}
 	resp, err := c.doPost("/register", body)
 	if err != nil {
@@ -162,6 +164,45 @@ func decodeErrorBody(r io.Reader) string {
 	}
 	_ = json.NewDecoder(r).Decode(&eb)
 	return eb.Error
+}
+
+// DeclareEmail updates a user's email using M.T. authentication. The M.T.
+// is sent in the "mt" field (API-DOC-FE §4.3).
+func (c *Client) DeclareEmail(email, playername string) error {
+	body := DeclareEmailRequest{
+		MT:         c.manageToken,
+		Email:      email,
+		PlayerName: playername,
+	}
+	resp, err := c.doPost("/user/declare-email", body)
+	if err != nil {
+		return ErrUpstream
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ErrUpstream
+	}
+	return nil
+}
+
+// EnableMojangBind enables the mbe (Mojang Bind Enabled) flag for a user
+// using M.T. authentication. This allows future Mojang players with the
+// same name to bind to this HA account (HA-ROADMAP §3.6).
+func (c *Client) EnableMojangBind(uid int64) error {
+	body := EnableMojangBindRequest{
+		RememberToken: c.manageToken,
+		UID:           strconv.FormatInt(uid, 10),
+		AuthType:      "manage",
+	}
+	resp, err := c.doPost("/user/mojang-bind-enable", body)
+	if err != nil {
+		return ErrUpstream
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ErrUpstream
+	}
+	return nil
 }
 
 // GetServerMeta fetches HA's Yggdrasil root metadata (skinDomains,
