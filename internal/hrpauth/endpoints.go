@@ -107,23 +107,13 @@ func (c *Client) BatchQuery(names []string) ([]*PlayerProfile, error) {
 	return out, nil
 }
 
-// RegisterByProxy performs an M.T.-authenticated POST /register against
-// HA. The M.T. is sent in the remember_token body field (HA-ROADMAP
-// §3.1) and is not exposed in HTTP headers.
-//
-//	200                → *RegisterResponse, nil
-//	409 + err=username_already_bound → nil, ErrUsernameBound
-//	400 + err=invalid_mojang_uuid    → nil, ErrInvalidInput
-//	5xx / network / decode error     → nil, ErrUpstream
-//	other 4xx                        → nil, ErrUpstream
+// RegisterByProxy performs an OAuth2-authenticated POST /register against HA.
 func (c *Client) RegisterByProxy(username, mojangUUID, password string) (*RegisterResponse, error) {
 	body := RegisterRequest{
-		Username:      username,
-		Password:      password,
-		Email:         "", // HA auto-fills placeholder in M.T. path
-		MojangUUID:    mojangUUID,
-		RememberToken: c.manageToken,
-		AuthType:      "manage",
+		Username:   username,
+		Password:   password,
+		Email:      "", // HA auto-fills placeholder in OAuth2 path
+		MojangUUID: mojangUUID,
 	}
 	resp, err := c.doPost("/register", body)
 	if err != nil {
@@ -166,11 +156,9 @@ func decodeErrorBody(r io.Reader) string {
 	return eb.Error
 }
 
-// DeclareEmail updates a user's email using M.T. authentication. The M.T.
-// is sent in the "mt" field (API-DOC-FE §4.3).
+// DeclareEmail updates a user's email using OAuth2 authentication.
 func (c *Client) DeclareEmail(email, playername string) error {
 	body := DeclareEmailRequest{
-		MT:         c.manageToken,
 		Email:      email,
 		PlayerName: playername,
 	}
@@ -186,13 +174,10 @@ func (c *Client) DeclareEmail(email, playername string) error {
 }
 
 // EnableMojangBind enables the mbe (Mojang Bind Enabled) flag for a user
-// using M.T. authentication. This allows future Mojang players with the
-// same name to bind to this HA account (HA-ROADMAP §3.6).
+// using OAuth2 authentication.
 func (c *Client) EnableMojangBind(uid int64) error {
 	body := EnableMojangBindRequest{
-		RememberToken: c.manageToken,
-		UID:           strconv.FormatInt(uid, 10),
-		AuthType:      "manage",
+		UID: strconv.FormatInt(uid, 10),
 	}
 	resp, err := c.doPost("/user/mojang-bind-enable", body)
 	if err != nil {

@@ -73,14 +73,14 @@ type UpstreamConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
-// HrpauthConfig is the HRPAuth-specific upstream config. The
-// ManageToken must match HRPAuth's config.yaml > manage.token.
+// HrpauthConfig is the HRPAuth-specific upstream config.
 type HrpauthConfig struct {
 	// URL is the HRPAuth base URL.
 	URL string `yaml:"url"`
-	// ManageToken is the M.T. sent as the remember_token body field on
-	// every M.T.-authenticated /register call.
-	ManageToken string `yaml:"manage_token"`
+	// ClientID is the OAuth2 client ID for WinnerProxy.
+	ClientID string `yaml:"client_id"`
+	// ClientSecret is the OAuth2 client secret for WinnerProxy.
+	ClientSecret string `yaml:"client_secret"`
 	// TimeoutSec is the per-request timeout in seconds.
 	TimeoutSec int `yaml:"timeout_sec"`
 	// Enabled toggles whether this upstream is active.
@@ -109,7 +109,7 @@ func Default() *Config {
 		},
 		Cache: CacheConfig{
 			Size:   100 * 1024 * 1024, // 100 MiB
-			TTLSec: 300,                // 5 minutes
+			TTLSec: 300,               // 5 minutes
 		},
 		Upstreams: UpstreamsConfig{
 			Official: UpstreamConfig{
@@ -118,10 +118,11 @@ func Default() *Config {
 				Enabled:    true,
 			},
 			Hrpauth: HrpauthConfig{
-				URL:         "http://127.0.0.1:2778",
-				ManageToken: "",
-				TimeoutSec:  10,
-				Enabled:     true,
+				URL:          "http://127.0.0.1:2778",
+				ClientID:     "",
+				ClientSecret: "",
+				TimeoutSec:   10,
+				Enabled:      true,
 			},
 		},
 		Site: SiteConfig{

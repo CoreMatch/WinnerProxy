@@ -20,17 +20,12 @@ type PlayerProperty struct {
 	Signature string `json:"signature,omitempty"`
 }
 
-// RegisterRequest is the body of POST /register when called via the
-// Manage Token (M.T.) path. Per HA-ROADMAP §3.2, M.T. is sent in the
-// remember_token field; mojang_uuid is optional; email is auto-filled
-// with a placeholder by HA when empty.
+// RegisterRequest is the body of POST /register.
 type RegisterRequest struct {
-	Username      string `json:"username"`
-	Password      string `json:"password"`
-	Email         string `json:"email"`
-	MojangUUID    string `json:"mojang_uuid,omitempty"`
-	RememberToken string `json:"remember_token,omitempty"`
-	AuthType      string `json:"auth_type,omitempty"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Email      string `json:"email"`
+	MojangUUID string `json:"mojang_uuid,omitempty"`
 }
 
 // RegisterResponse is what HA returns on a successful POST /register.
@@ -46,17 +41,14 @@ type RegisterResponse struct {
 
 // DeclareEmailRequest is the body for POST /user/declare-email.
 type DeclareEmailRequest struct {
-	MT         string `json:"mt"`
 	Email      string `json:"email"`
 	PlayerName string `json:"playername"`
 }
 
 // EnableMojangBindRequest is the body for POST /user/mojang-bind-enable.
 type EnableMojangBindRequest struct {
-	RememberToken string `json:"remember_token"`
-	UID           string `json:"uid,omitempty"`
-	Email         string `json:"email,omitempty"`
-	AuthType      string `json:"auth_type"`
+	UID   string `json:"uid,omitempty"`
+	Email string `json:"email,omitempty"`
 }
 
 // CommonResponse is a generic HA response shape.

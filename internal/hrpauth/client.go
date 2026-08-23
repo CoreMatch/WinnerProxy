@@ -2,11 +2,14 @@ package hrpauth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
-	"time"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 // HTTPDoer is the minimal interface the client needs from net/http.
@@ -40,22 +43,32 @@ var (
 // Client is a thin HTTP client for HRPAuth. One instance per WinnerProxy
 // process; safe for concurrent use because *http.Client is.
 type Client struct {
-	baseURL     string
-	manageToken string
-	http        HTTPDoer
+	baseURL string
+	http    HTTPDoer
 }
 
-// New constructs a Client. If doer is nil, a *http.Client with a 10s
-// timeout is used. manageToken is sent on every RegisterByProxy call
-// in the remember_token body field (see HA-ROADMAP §3.1).
-func New(baseURL, manageToken string, doer HTTPDoer) *Client {
-	if doer == nil {
-		doer = &http.Client{Timeout: 10 * time.Second}
+// New constructs a Client. It initializes an OAuth2 client_credentials
+// flow using the provided clientID and clientSecret. The returned client
+// automatically attaches a Bearer token to every request.
+func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
+	ctx := context.Background()
+	if doer != nil {
+		// If a custom doer is provided (e.g. in tests), we must ensure
+		// oauth2 uses it for token exchange.
+		if httpClient, ok := doer.(*http.Client); ok {
+			ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
+		}
 	}
+
+	conf := &clientcredentials.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		TokenURL:     strings.TrimRight(baseURL, "/") + "/oauth/token",
+	}
+
 	return &Client{
-		baseURL:     strings.TrimRight(baseURL, "/"),
-		manageToken: manageToken,
-		http:        doer,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		http:    conf.Client(ctx),
 	}
 }
 

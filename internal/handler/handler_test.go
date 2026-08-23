@@ -73,6 +73,10 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 	t.Helper()
 	ha := &fakeHA{}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"test-token","token_type":"Bearer","expires_in":3600}`))
+	})
 	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		ha.hasJoinCalls.Add(1)
 		if ha.hasJoin != nil {
@@ -89,7 +93,7 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	mux.HandleFunc("/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		ha.batchCalls.Add(1)
 		if ha.batch != nil {
 			ha.batch(w, r)
@@ -128,7 +132,7 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 func buildRouter(t *testing.T, srv *httptest.Server, mojang proxy.UpstreamService, c cache.ProfileCache) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	cli := hrpauth.New(srv.URL, "test-mt", nil)
+	cli := hrpauth.New(srv.URL, "client-id", "client-secret", nil)
 	var services []proxy.UpstreamService
 	if mojang != nil {
 		services = append(services, mojang)

@@ -11,21 +11,21 @@ import (
 )
 
 // newTestClient returns a Client pointing at the given test server URL,
-// with a fixed M.T. and the default *http.Client as the doer.
+// with fixed credentials and the default *http.Client as the doer.
 func newTestClient(t *testing.T, baseURL string) *Client {
 	t.Helper()
-	return New(baseURL, "test-manage-token", nil)
+	return New(baseURL, "test-client-id", "test-client-secret", nil)
 }
 
 func TestNew_TrimsTrailingSlash(t *testing.T) {
-	c := New("http://example.com/", "tok", nil)
+	c := New("http://example.com/", "id", "secret", nil)
 	if c.baseURL != "http://example.com" {
 		t.Fatalf("expected trimmed baseURL, got %q", c.baseURL)
 	}
 }
 
 func TestNew_NilDoerDefaultsToHTTPClient(t *testing.T) {
-	c := New("http://x", "tok", nil)
+	c := New("http://x", "id", "secret", nil)
 	if c.http == nil {
 		t.Fatal("expected non-nil http doer")
 	}
@@ -34,7 +34,15 @@ func TestNew_NilDoerDefaultsToHTTPClient(t *testing.T) {
 // --- HasJoined ---
 
 func TestHasJoined_200(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","token_type":"Bearer","expires_in":3600}`))
+	})
+	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer token" {
+			t.Errorf("missing or invalid Authorization header: %q", r.Header.Get("Authorization"))
+		}
 		if r.URL.Path != "/sessionserver/session/minecraft/hasJoined" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
@@ -54,7 +62,8 @@ func TestHasJoined_200(t *testing.T) {
 				{Name: "textures", Value: "v", Signature: "s"},
 			},
 		})
-	}))
+	})
+	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	c := newTestClient(t, srv.URL)
@@ -74,11 +83,23 @@ func TestHasJoined_200(t *testing.T) {
 	}
 }
 
+// newTestServer returns a mux and a server that already handles /oauth/token.
+func newTestServer(t *testing.T) (*http.ServeMux, *httptest.Server) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"test-token","token_type":"Bearer","expires_in":3600}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return mux, srv
+}
+
 func TestHasJoined_204(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.HasJoined(url.Values{"username": {"bob"}})
@@ -92,11 +113,11 @@ func TestHasJoined_204(t *testing.T) {
 // ErrNoProfile (matching the 204 path) rather than returning a
 // zero-value profile to the game server.
 func TestHasJoined_200_EmptyBody(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, "{}")
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	got, err := c.HasJoined(url.Values{"username": {"bob"}})
@@ -109,10 +130,10 @@ func TestHasJoined_200_EmptyBody(t *testing.T) {
 }
 
 func TestHasJoined_5xx(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.HasJoined(url.Values{"username": {"bob"}})
@@ -122,7 +143,7 @@ func TestHasJoined_5xx(t *testing.T) {
 }
 
 func TestHasJoined_NetworkError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	_, srv := newTestServer(t)
 	srv.Close() // close immediately so connect fails
 
 	c := newTestClient(t, srv.URL)
@@ -133,11 +154,11 @@ func TestHasJoined_NetworkError(t *testing.T) {
 }
 
 func TestHasJoined_BadJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, "not-json")
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.HasJoined(url.Values{"username": {"bob"}})
@@ -149,13 +170,13 @@ func TestHasJoined_BadJSON(t *testing.T) {
 // --- GetProfile ---
 
 func TestGetProfile_200(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/profile/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("unsigned") != "true" {
 			t.Errorf("expected unsigned=true, got %q", r.URL.Query().Get("unsigned"))
 		}
 		_ = json.NewEncoder(w).Encode(PlayerProfile{ID: "uuid", Name: "alice"})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	got, err := c.GetProfile("uuid", true)
@@ -168,13 +189,13 @@ func TestGetProfile_200(t *testing.T) {
 }
 
 func TestGetProfile_NoUnsignedParam(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/profile/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("unsigned") != "" {
 			t.Errorf("did not expect unsigned param, got %q", r.URL.Query().Get("unsigned"))
 		}
 		_ = json.NewEncoder(w).Encode(PlayerProfile{ID: "uuid", Name: "alice"})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.GetProfile("uuid", false)
@@ -184,10 +205,10 @@ func TestGetProfile_NoUnsignedParam(t *testing.T) {
 }
 
 func TestGetProfile_404(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/sessionserver/session/minecraft/profile/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.GetProfile("nope", false)
@@ -200,14 +221,14 @@ func TestGetProfile_404(t *testing.T) {
 
 func TestBatchQuery_200(t *testing.T) {
 	var gotReq []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotReq)
 		_ = json.NewEncoder(w).Encode([]*PlayerProfile{
 			{ID: "id1", Name: "alice"},
 			{ID: "id2", Name: "bob"},
 		})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	got, err := c.BatchQuery([]string{"alice", "bob"})
@@ -223,10 +244,10 @@ func TestBatchQuery_200(t *testing.T) {
 }
 
 func TestBatchQuery_5xx(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.BatchQuery([]string{"alice"})
@@ -239,7 +260,8 @@ func TestBatchQuery_5xx(t *testing.T) {
 
 func TestRegisterByProxy_200(t *testing.T) {
 	var gotBody RegisterRequest
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		_ = json.NewEncoder(w).Encode(RegisterResponse{
 			Success:   true,
@@ -248,8 +270,7 @@ func TestRegisterByProxy_200(t *testing.T) {
 			ProfileID: "f7c77d999f154a66a87dc4a51ef30d19",
 			CBH:       0,
 		})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	got, err := c.RegisterByProxy("alice", "f7c77d999f154a66a87dc4a51ef30d19", "pw123456")
@@ -258,12 +279,6 @@ func TestRegisterByProxy_200(t *testing.T) {
 	}
 	if got.ProfileID != "f7c77d999f154a66a87dc4a51ef30d19" || got.CBH != 0 || got.UID != 42 {
 		t.Errorf("unexpected response: %+v", got)
-	}
-	if gotBody.RememberToken != "test-manage-token" {
-		t.Errorf("M.T. not injected: %q", gotBody.RememberToken)
-	}
-	if gotBody.AuthType != "manage" {
-		t.Errorf("AuthType not injected: %q", gotBody.AuthType)
 	}
 	if gotBody.Username != "alice" || gotBody.MojangUUID != "f7c77d999f154a66a87dc4a51ef30d19" {
 		t.Errorf("body fields wrong: %+v", gotBody)
@@ -274,11 +289,11 @@ func TestRegisterByProxy_200(t *testing.T) {
 }
 
 func TestRegisterByProxy_409_UsernameBound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(409)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "username_already_bound"})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
@@ -288,11 +303,11 @@ func TestRegisterByProxy_409_UsernameBound(t *testing.T) {
 }
 
 func TestRegisterByProxy_400_InvalidMojangUUID(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(400)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid_mojang_uuid"})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.RegisterByProxy("alice", "not-hex", "pw")
@@ -302,10 +317,10 @@ func TestRegisterByProxy_400_InvalidMojangUUID(t *testing.T) {
 }
 
 func TestRegisterByProxy_500(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
@@ -316,11 +331,11 @@ func TestRegisterByProxy_500(t *testing.T) {
 
 func TestRegisterByProxy_409_OtherError(t *testing.T) {
 	// 409 with unknown error code → ErrUpstream (defensive)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(409)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "weird_state"})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
@@ -331,11 +346,11 @@ func TestRegisterByProxy_409_OtherError(t *testing.T) {
 
 func TestRegisterByProxy_400_OtherError(t *testing.T) {
 	// 400 with unknown error code → ErrUpstream
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(400)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "weird_state"})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
@@ -346,11 +361,11 @@ func TestRegisterByProxy_400_OtherError(t *testing.T) {
 
 func TestRegisterByProxy_ContentType(t *testing.T) {
 	var gotCT string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		gotCT = r.Header.Get("Content-Type")
 		_ = json.NewEncoder(w).Encode(RegisterResponse{Success: true})
-	}))
-	defer srv.Close()
+	})
 
 	c := newTestClient(t, srv.URL)
 	_, _ = c.RegisterByProxy("alice", "uuid", "pw")
