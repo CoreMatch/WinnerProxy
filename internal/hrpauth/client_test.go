@@ -256,6 +256,58 @@ func TestBatchQuery_5xx(t *testing.T) {
 	}
 }
 
+// --- RegisterPresence ---
+
+func TestRegisterPresence_200(t *testing.T) {
+	var gotBody PresenceRequest
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/services/presence", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+			t.Errorf("expected Content-Type: application/json, got %q", ct)
+		}
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"success":true,"message":"ca va très bien, merci"}`)
+	})
+
+	c := newTestClient(t, srv.URL)
+	if err := c.RegisterPresence(PresenceRequest{Name: "WinnerProxy", TTLSeconds: 0}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotBody.Name != "WinnerProxy" {
+		t.Errorf("name mismatch: %q", gotBody.Name)
+	}
+	if gotBody.TTLSeconds != 0 {
+		t.Errorf("ttl_seconds mismatch: %d", gotBody.TTLSeconds)
+	}
+}
+
+func TestRegisterPresence_Non200(t *testing.T) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/services/presence", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		_, _ = io.WriteString(w, `{"success":false,"code":"invalid_request"}`)
+	})
+
+	c := newTestClient(t, srv.URL)
+	if err := c.RegisterPresence(PresenceRequest{Name: "WinnerProxy"}); err != ErrUpstream {
+		t.Fatalf("expected ErrUpstream, got %v", err)
+	}
+}
+
+func TestRegisterPresence_NetworkError(t *testing.T) {
+	_, srv := newTestServer(t)
+	srv.Close() // close immediately so connect fails
+
+	c := newTestClient(t, srv.URL)
+	if err := c.RegisterPresence(PresenceRequest{Name: "WinnerProxy"}); err != ErrUpstream {
+		t.Fatalf("expected ErrUpstream, got %v", err)
+	}
+}
+
 // --- RegisterByProxy ---
 
 func TestRegisterByProxy_200(t *testing.T) {

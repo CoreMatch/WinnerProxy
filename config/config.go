@@ -18,6 +18,8 @@ type Config struct {
 	Cache CacheConfig `yaml:"cache"`
 	// Log controls log output behavior.
 	Log LogConfig `yaml:"log"`
+	// Presence controls the microservice presence handshake with HRPAuth.
+	Presence PresenceConfig `yaml:"presence"`
 	// Upstreams groups all upstream Mojang / HRPAuth endpoints.
 	Upstreams UpstreamsConfig `yaml:"upstreams"`
 	// Site holds non-runtime metadata about the deployment.
@@ -87,6 +89,21 @@ type HrpauthConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// PresenceConfig controls the microservice presence handshake with
+// HRPAuth (POST /services/presence, the "bonjour" handshake). The
+// handshake registers WinnerProxy in HRPAuth's in-process presence
+// registry so the main service knows it is online. A failed handshake
+// is logged but never blocks or stops the proxy.
+type PresenceConfig struct {
+	// Enabled toggles the presence handshake. Default true.
+	Enabled bool `yaml:"enabled"`
+	// Name is the service name registered in HRPAuth. Default "WinnerProxy".
+	Name string `yaml:"name"`
+	// TTLSeconds is the self-declared lifetime in seconds; <=0 (default)
+	// means the record never expires and stays until HRPAuth stops.
+	TTLSeconds int `yaml:"ttl_seconds"`
+}
+
 // UpstreamsConfig groups every upstream the proxy knows about.
 type UpstreamsConfig struct {
 	// Official is the upstream for the official Mojang services.
@@ -106,6 +123,11 @@ func Default() *Config {
 		Log: LogConfig{
 			Level:  "info",
 			Format: "text",
+		},
+		Presence: PresenceConfig{
+			Enabled:    true,
+			Name:       "WinnerProxy",
+			TTLSeconds: 0,
 		},
 		Cache: CacheConfig{
 			Size:   100 * 1024 * 1024, // 100 MiB

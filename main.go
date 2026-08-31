@@ -45,6 +45,14 @@ func main() {
 		nil,
 	)
 
+	if cfg.Presence.Enabled {
+		if cfg.Upstreams.Hrpauth.Enabled {
+			announcePresence(hrpauthCli, cfg.Presence)
+		} else {
+			log.Printf("presence handshake skipped (hrpauth upstream disabled)")
+		}
+	}
+
 	services := []proxy.UpstreamService{
 		proxy.NewHrpauthService(hrpauthCli),
 	}
@@ -61,6 +69,23 @@ func main() {
 	if err := engine.Run(cfg.Server.Addr); err != nil {
 		log.Fatalf("server stopped: %v", err)
 	}
+}
+
+// announcePresence performs the presence (bonjour) handshake with
+// HRPAuth asynchronously. It registers WinnerProxy in HRPAuth's
+// presence registry; a failure is only logged as a warning and never
+// blocks or stops the main process.
+func announcePresence(cli *hrpauth.Client, cfg config.PresenceConfig) {
+	go func() {
+		if err := cli.RegisterPresence(hrpauth.PresenceRequest{
+			Name:       cfg.Name,
+			TTLSeconds: cfg.TTLSeconds,
+		}); err != nil {
+			log.Printf("WARN: presence handshake with hrpauth failed (proxy continues running): %v", err)
+			return
+		}
+		log.Printf("presence handshake ok: registered as %q", cfg.Name)
+	}()
 }
 
 // buildCache returns a ProfileCache from config. size=0 yields the

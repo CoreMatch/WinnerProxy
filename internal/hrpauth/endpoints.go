@@ -146,6 +146,28 @@ func (c *Client) RegisterByProxy(username, mojangUUID, password string) (*Regist
 	}
 }
 
+// RegisterPresence performs the microservice presence (bonjour)
+// handshake: it registers or heartbeats WinnerProxy in HRPAuth's
+// presence registry. It is fire-and-forget from the caller's point of
+// view; failures surface as ErrUpstream and never stop the process.
+//
+//	200          → nil
+//	network err  → ErrUpstream
+//	other status → ErrUpstream
+func (c *Client) RegisterPresence(req PresenceRequest) error {
+	resp, err := c.doPost("/services/presence", req)
+	if err != nil {
+		return ErrUpstream
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return ErrUpstream
+	}
+	return nil
+}
+
 // decodeErrorBody reads a {"error": "..."} body and returns the error
 // code. Decode failures are silently treated as "".
 func decodeErrorBody(r io.Reader) string {

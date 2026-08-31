@@ -51,6 +51,17 @@ type EnableMojangBindRequest struct {
 	Email string `json:"email,omitempty"`
 }
 
+// PresenceRequest is the body of the microservice presence handshake
+// (POST /services/presence, the "bonjour" handshake). Only the fields
+// WinnerProxy uses are modeled; optional contract fields (scope,
+// sdk_url, security_level, interacts_with) are omitted and stay unset.
+type PresenceRequest struct {
+	Name string `json:"name"`
+	// TTLSeconds is the self-declared lifetime in seconds; <=0 or
+	// omitted means the record never expires.
+	TTLSeconds int `json:"ttl_seconds"`
+}
+
 // CommonResponse is a generic HA response shape.
 type CommonResponse struct {
 	Success bool   `json:"success"`
