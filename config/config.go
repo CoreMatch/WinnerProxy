@@ -5,6 +5,7 @@
 package config
 
 import (
+	"log"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -156,12 +157,18 @@ func Default() *Config {
 }
 
 // Load reads configuration from the YAML file at path. Missing fields
-// fall back to Default() values; an unreadable or missing file yields
-// the defaults without error.
+// fall back to Default() values. When the file does not exist a fresh
+// default config.yml is written so the operator can edit it.
 func Load(path string) *Config {
 	cfg := Default()
 	data, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("config file not found at %s, creating default config...", path)
+		if werr := os.WriteFile(path, DefaultYAML(), 0644); werr != nil {
+			log.Printf("failed to write default config: %v, using built-in defaults", werr)
+		} else {
+			log.Printf("default config created at %s — please edit and restart", path)
+		}
 		return cfg
 	}
 	_ = yaml.Unmarshal(data, cfg)

@@ -26,7 +26,9 @@ func main() {
 	}
 
 	cfg := config.Load(cfgPath)
-	log.Printf("config loaded: %s", cfgPath)
+	if _, ferr := os.Stat(cfgPath); ferr == nil {
+		log.Printf("config loaded: %s", cfgPath)
+	}
 
 	if cfg.Upstreams.Hrpauth.Enabled {
 		log.Printf("hrpauth upstream enabled (url=%s, timeout=%ds)",
