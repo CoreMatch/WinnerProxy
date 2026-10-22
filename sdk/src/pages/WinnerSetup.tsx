@@ -36,11 +36,24 @@ export default function WinnerSetup() {
 
   useEffect(() => {
     let mounted = true;
-    getRealBackendUrl().then((url: string) => {
+
+    // First check if the host has provided a service-specific SDK URL via manifest/presence
+    // @ts-ignore
+    const serviceSdkUrl = window.__HRP_SDK_CONFIG__?.winnerproxy?.sdk_url;
+
+    if (serviceSdkUrl) {
       if (mounted) {
-        setBaseUrl(buildServiceUrl(url, '').replace(/\/$/, ''));
+        setBaseUrl(serviceSdkUrl.replace(/\/$/, ''));
       }
-    });
+    } else {
+      // Fallback to dynamic relay-based URL calculation
+      getRealBackendUrl().then((url: string) => {
+        if (mounted) {
+          setBaseUrl(buildServiceUrl(url, '').replace(/\/$/, ''));
+        }
+      });
+    }
+
     return () => {
       mounted = false;
     };
@@ -56,7 +69,7 @@ export default function WinnerSetup() {
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Typography variant="h5" component="h1">
-        WinnerProxy (Yggdrasil 代理) 配置
+        WinnerProxy 配置
       </Typography>
 
       <Typography variant="body1">

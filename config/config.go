@@ -111,8 +111,11 @@ type PresenceConfig struct {
 // SDKConfig controls the SDK package upload to HRPAuth.
 type SDKConfig struct {
 	// Enabled toggles whether the SDK package is uploaded to HRPAuth
-	// at startup. Default true.
+	// at startup. Supports 0/1 or boolean. Default true.
 	Enabled bool `yaml:"enabled"`
+	// URL is the custom API URL shown in the SDK UI. If empty,
+	// the relay-registered URL is used.
+	URL string `yaml:"url"`
 }
 
 // HrpauthBackendConfig controls the HRPAuth management integration.

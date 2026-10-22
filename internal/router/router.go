@@ -12,13 +12,13 @@ func New(h *handler.Handler) *gin.Engine {
 
 	r.GET("/health", h.Health)
 
-	// Yggdrasil status endpoint: serve at both "/" and "/yggdrasil"
-	// so Mojang/legacy clients that probe the root path get a valid response.
+	// WinnerProxy status endpoint: serve at both "/" and "/winnerproxy"
+	// so clients that probe the root path get a valid response.
 	r.GET("/", h.YggdrasilRoot)
-	r.GET("/yggdrasil", h.YggdrasilRoot)
+	r.GET("/winnerproxy", h.YggdrasilRoot)
 
 	// Register every Yggdrasil route under both the prefix-less
-	// (Mojang-style) path and the "/yggdrasil" prefix. Minecraft
+	// (Mojang-style) path and the "/winnerproxy" prefix. Minecraft
 	// launchers and legacy probes hit the prefix-less form, while
 	// HA's own clients use the prefixed form. The handler is
 	// identical, so we just bind the same function twice.
@@ -28,7 +28,7 @@ func New(h *handler.Handler) *gin.Engine {
 		group.POST("/api/profiles/minecraft", h.BatchQuery)
 	}
 	bindYggdrasil(r.Group("/"))
-	bindYggdrasil(r.Group("/yggdrasil"))
+	bindYggdrasil(r.Group("/winnerproxy"))
 
 	return r
 }

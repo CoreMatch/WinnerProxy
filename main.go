@@ -97,7 +97,7 @@ func main() {
 	// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
 	// Registers the service and its relay rules.
 	if cfg.Hrpauth.Presence.Enabled {
-		announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL)
+		announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL, cfg.Hrpauth.SDK.URL)
 	}
 
 	services := []proxy.UpstreamService{
@@ -126,7 +126,7 @@ func main() {
 // HRPAuth asynchronously. It registers WinnerProxy in HRPAuth's
 // presence registry and registers relay rules; a failure is only logged
 // as a warning and never blocks or stops the main process.
-func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, publicURL string) {
+func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, publicURL, sdkURL string) {
 	go func() {
 		log.Printf("Presence: starting microservice registration (name=%s)", cfg.Name)
 
@@ -143,6 +143,7 @@ func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, 
 				Name:          "winnerproxy",
 				FrontendAreas: []string{"webui-dash"},
 			},
+			SDKURL: sdkURL,
 			RootMetadata: map[string]interface{}{
 				"yggdrasil": meta,
 			},
@@ -159,12 +160,12 @@ func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, 
 		}
 
 		log.Printf("Presence: initiating relay registration for %s", publicURL)
-		relays := buildRelayRules(publicURL, "/yggdrasil")
+		relays := buildRelayRules(publicURL, "/winnerproxy")
 		if err := cli.RegisterRelay(cfg.Name, relays); err != nil {
 			log.Printf("Presence: relay registration failed: %v", err)
 			return
 		}
-		log.Printf("Presence: %d relay rules successfully active under /yggdrasil", len(relays))
+		log.Printf("Presence: %d relay rules successfully active under /winnerproxy", len(relays))
 	}()
 }
 

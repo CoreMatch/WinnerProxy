@@ -6,7 +6,7 @@ export { BackendUrl, getRealBackendUrl } from '../../../../../utils/config';
 // @ts-ignore
 export { request } from '../../../../../utils/api';
 
-const SERVICE_PREFIX = '/yggdrasil';
+const SERVICE_PREFIX = '/winnerproxy';
 
 export function getServiceBackendUrl(baseUrl: string): string {
   const base = (baseUrl || '').replace(/\/$/, '');

@@ -213,7 +213,7 @@ func (h *Handler) BatchQuery(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// YggdrasilRoot is the meta endpoint served at "/" and "/yggdrasil".
+// YggdrasilRoot is the meta endpoint served at "/" and "/winnerproxy".
 // It passes through HA's root response so the Minecraft client gets
 // HA's real skinDomains / signaturePublickey. On HA failure it
 // returns a minimal {skinDomains: []} so legacy probes still succeed.
