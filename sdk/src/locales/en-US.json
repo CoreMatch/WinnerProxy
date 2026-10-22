@@ -1,0 +1,14 @@
+{
+  "winnerproxy": {
+    "setup": {
+      "title": "WinnerProxy Configuration",
+      "description": "WinnerProxy is a Yggdrasil proxy service that supports dual backends: HRPAuth and Mojang. Using this API address, you can log in with both HRPAuth and official Mojang accounts.",
+      "api_url": "WinnerProxy API URL",
+      "copy": "Copy URL",
+      "copied": "Copied!",
+      "usage_title": "Instructions",
+      "usage_step_1": "Use Authlib Injector or Loki.",
+      "usage_step_2": "Set WinnerProxy as the upstream."
+    }
+  }
+}

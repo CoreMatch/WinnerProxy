@@ -8,8 +8,9 @@ import {
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { getRealBackendUrl, buildServiceUrl } from '../utils/proxy';
+import { useTranslation } from '../utils/i18n';
 
-function CodeBlock({ children }: { children: string }) {
+function CodeBlock({ children }: { children: React.ReactNode }) {
   return (
     <Box
       sx={{
@@ -31,6 +32,7 @@ function CodeBlock({ children }: { children: string }) {
 }
 
 export default function WinnerSetup() {
+  const { t } = useTranslation();
   const [baseUrl, setBaseUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -69,18 +71,17 @@ export default function WinnerSetup() {
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Typography variant="h5" component="h1">
-        WinnerProxy 配置
+        {t('winnerproxy.setup.title')}
       </Typography>
 
       <Typography variant="body1">
-        WinnerProxy 是一个支持 HRPAuth 与 Mojang 双回源的 Yggdrasil 代理服务。
-        使用此代理地址，你可以同时登录 HRPAuth 账号与正版 Mojang 账号。
+        {t('winnerproxy.setup.description')}
       </Typography>
 
       <Card>
         <CardContent>
           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            WinnerProxy API 地址
+            {t('winnerproxy.setup.api_url')}
           </Typography>
           <CodeBlock>{baseUrl}</CodeBlock>
           <Button
@@ -89,7 +90,7 @@ export default function WinnerSetup() {
             onClick={handleCopy}
             sx={{ mt: 2 }}
           >
-            {copied ? '已复制!' : '复制地址'}
+            {copied ? t('winnerproxy.setup.copied') : t('winnerproxy.setup.copy')}
           </Button>
         </CardContent>
       </Card>
@@ -97,16 +98,17 @@ export default function WinnerSetup() {
       <Card>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1 }}>
-            使用说明
+            {t('winnerproxy.setup.usage_title')}
           </Typography>
           <Box component="ol" sx={{ pl: 2, m: 0 }}>
             <li>
               <Typography variant="body2" sx={{ mb: 1 }}>
-                使用Authlib Injector或Loki. </Typography>
+                {t('winnerproxy.setup.usage_step_1')}
+              </Typography>
             </li>
             <li>
               <Typography variant="body2" sx={{ mb: 1 }}>
-                Use Winnerproxy as upstream.
+                {t('winnerproxy.setup.usage_step_2')}
               </Typography>
             </li>
           </Box>
