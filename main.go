@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/winnerproxy/winnerproxy/config"
@@ -40,23 +41,40 @@ func main() {
 	} else {
 		log.Printf("hrpauth upstream disabled")
 	}
-	hrpauthCli := hrpauth.New(
+	hrpauthProxyCli := hrpauth.New(
 		cfg.Upstreams.Hrpauth.URL,
 		cfg.Upstreams.Hrpauth.ClientID,
 		cfg.Upstreams.Hrpauth.ClientSecret,
 		nil,
 	)
 
-	if cfg.Presence.Enabled {
-		if cfg.Upstreams.Hrpauth.Enabled {
-			announcePresence(hrpauthCli, cfg.Presence)
-		} else {
-			log.Printf("presence handshake skipped (hrpauth upstream disabled)")
-		}
+	// Management client for Presence, SDK, and Relay registration.
+	// Uses cfg.Hrpauth which points to the root backend.
+	hrpauthMgmtCli := hrpauth.New(
+		cfg.Hrpauth.URL,
+		cfg.Hrpauth.ClientID,
+		cfg.Hrpauth.ClientSecret,
+		nil,
+	)
+
+	// 2.2 Upload the compile-time SDK package to HRPAuth (if configured),
+	// non-blocking. The WEBUI SDK handler aggregates it into the frontend
+	// build.
+	if cfg.Hrpauth.SDK.Enabled {
+		uploadSDKPackage(hrpauthMgmtCli)
+	}
+
+	// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
+	// Registers the service and its relay rules.
+	if cfg.Hrpauth.Presence.Enabled {
+		// Fetch server meta from upstream HRPAuth to include in RootMetadata.
+		// This allows HRPAuth to aggregate WinnerProxy's Yggdrasil info.
+		meta, _ := hrpauthProxyCli.GetServerMeta()
+		announcePresence(hrpauthMgmtCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL, meta)
 	}
 
 	services := []proxy.UpstreamService{
-		proxy.NewHrpauthService(hrpauthCli),
+		proxy.NewHrpauthService(hrpauthProxyCli),
 	}
 	if cfg.Upstreams.Official.Enabled {
 		mojang := proxy.NewMojangService(
@@ -68,7 +86,7 @@ func main() {
 			cfg.Upstreams.Official.URL, cfg.Upstreams.Official.TimeoutSec)
 	}
 
-	h := handler.New(services, hrpauthCli, buildCache(cfg.Cache))
+	h := handler.New(services, hrpauthProxyCli, buildCache(cfg.Cache))
 	engine := router.New(h)
 
 	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)
@@ -79,19 +97,67 @@ func main() {
 
 // announcePresence performs the presence (bonjour) handshake with
 // HRPAuth asynchronously. It registers WinnerProxy in HRPAuth's
-// presence registry; a failure is only logged as a warning and never
-// blocks or stops the main process.
-func announcePresence(cli *hrpauth.Client, cfg config.PresenceConfig) {
+// presence registry and registers relay rules; a failure is only logged
+// as a warning and never blocks or stops the main process.
+func announcePresence(cli *hrpauth.Client, cfg config.PresenceConfig, publicURL string, meta map[string]any) {
 	go func() {
-		if err := cli.RegisterPresence(hrpauth.PresenceRequest{
-			Name:       cfg.Name,
-			TTLSeconds: cfg.TTLSeconds,
-		}); err != nil {
+		req := hrpauth.PresenceRequest{
+			Name:          cfg.Name,
+			TTLSeconds:    cfg.TTLSeconds,
+			SecurityLevel: 0, // Level 0 to allow anonymous relay for Yggdrasil
+			Scope: &hrpauth.PresenceScope{
+				Name:          "winnerproxy",
+				FrontendAreas: []string{"webui-dash"},
+			},
+			RootMetadata: map[string]interface{}{
+				"yggdrasil": meta,
+			},
+		}
+		if err := cli.RegisterPresence(req); err != nil {
 			log.Printf("WARN: presence handshake with hrpauth failed (proxy continues running): %v", err)
 			return
 		}
 		log.Printf("presence handshake ok: registered as %q", cfg.Name)
+
+		if publicURL == "" {
+			return
+		}
+
+		relays := buildRelayRules(publicURL, "/yggdrasil")
+		if err := cli.RegisterRelay(cfg.Name, relays); err != nil {
+			log.Printf("WARN: relay registration failed (proxy continues running): %v", err)
+			return
+		}
+		log.Printf("relay registration ok: %d paths registered under /yggdrasil", len(relays))
 	}()
+}
+
+// buildRelayRules creates a set of relay mappings for Yggdrasil endpoints.
+func buildRelayRules(base, prefix string) []hrpauth.RelayRule {
+	base = strings.TrimRight(base, "/")
+	prefix = strings.TrimRight(prefix, "/")
+	paths := []string{
+		"/",
+		"/authserver",
+		"/sessionserver",
+		"/api/profiles/minecraft",
+		"/textures",
+		"/previews",
+		"/texture",
+		"/skin",
+		"/skins",
+		"/minecraftservices",
+		"/register",
+	}
+
+	relays := make([]hrpauth.RelayRule, 0, len(paths))
+	for _, path := range paths {
+		relays = append(relays, hrpauth.RelayRule{
+			Dest:   prefix + path,
+			Source: base + path,
+		})
+	}
+	return relays
 }
 
 // buildCache returns a ProfileCache from config. size=0 yields the

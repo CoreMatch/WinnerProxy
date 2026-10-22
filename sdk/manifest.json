@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "winnerproxy",
+  "version": "1.0.0",
+  "routes": [
+    {
+      "path": "/winner-proxy",
+      "module": "src/pages/WinnerSetup",
+      "title": "Winner Proxy"
+    }
+  ],
+  "menu": [
+    {
+      "label": "Winner Proxy",
+      "path": "/winner-proxy"
+    }
+  ],
+  "dashboard": [
+    {
+      "label": "Winner Proxy",
+      "path": "/winner-proxy"
+    }
+  ],
+  "dependencies": {},
+  "run_scripts": false
+}

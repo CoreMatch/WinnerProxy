@@ -1,8 +1,11 @@
 package hrpauth
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"mime/multipart"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -235,4 +238,87 @@ func (c *Client) GetServerMeta() (map[string]any, error) {
 		return nil, ErrUpstream
 	}
 	return meta, nil
+}
+
+// RegisterRelay registers relay rules for the microservice.
+func (c *Client) RegisterRelay(name string, rules []RelayRule) error {
+	req := RegisterRelayRequest{
+		Name:   name,
+		Relays: rules,
+	}
+	resp, err := c.doPost("/services/relay", req)
+	if err != nil {
+		return ErrUpstream
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ErrUpstream
+	}
+	return nil
+}
+
+// UploadSDKPackage uploads an SDK package archive to HRPAuth.
+func (c *Client) UploadSDKPackage(archive []byte, filename string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, err := mw.CreateFormFile("package", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(archive); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+
+	u, err := url.JoinPath(c.baseURL, "/services/sdk-packages")
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, u, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return ErrUpstream
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case 200, 201:
+		return nil
+	case 409:
+		return ErrSDKPackageConflict
+	default:
+		return ErrUpstream
+	}
+}
+
+// DeleteSDKPackage deletes an SDK package from HRPAuth.
+func (c *Client) DeleteSDKPackage(name string) error {
+	u, err := url.JoinPath(c.baseURL, "/services/sdk-packages/"+name)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodDelete, u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return ErrUpstream
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return ErrUpstream
+	}
+	return nil
 }

@@ -19,8 +19,8 @@ type Config struct {
 	Cache CacheConfig `yaml:"cache"`
 	// Log controls log output behavior.
 	Log LogConfig `yaml:"log"`
-	// Presence controls the microservice presence handshake with HRPAuth.
-	Presence PresenceConfig `yaml:"presence"`
+	// Hrpauth controls the backend management integration (Presence, SDK).
+	Hrpauth HrpauthBackendConfig `yaml:"hrpauth"`
 	// Upstreams groups all upstream Mojang / HRPAuth endpoints.
 	Upstreams UpstreamsConfig `yaml:"upstreams"`
 	// Site holds non-runtime metadata about the deployment.
@@ -33,6 +33,9 @@ type Config struct {
 type ServerConfig struct {
 	// Addr is the address the engine binds to, e.g. ":2777".
 	Addr string `yaml:"addr"`
+	// PublicURL is the externally accessible URL of this service.
+	// Used for relay registration and SDK generation.
+	PublicURL string `yaml:"public_url"`
 	// ReadTimeoutSec is the maximum duration in seconds for reading
 	// the entire request, including the body.
 	ReadTimeoutSec int `yaml:"read_timeout_sec"`
@@ -105,6 +108,27 @@ type PresenceConfig struct {
 	TTLSeconds int `yaml:"ttl_seconds"`
 }
 
+// SDKConfig controls the SDK package upload to HRPAuth.
+type SDKConfig struct {
+	// Enabled toggles whether the SDK package is uploaded to HRPAuth
+	// at startup. Default true.
+	Enabled bool `yaml:"enabled"`
+}
+
+// HrpauthBackendConfig controls the HRPAuth management integration.
+type HrpauthBackendConfig struct {
+	// URL is the HRPAuth management base URL (usually the root path).
+	URL string `yaml:"url"`
+	// ClientID is the OAuth2 client ID for WinnerProxy.
+	ClientID string `yaml:"client_id"`
+	// ClientSecret is the OAuth2 client secret for WinnerProxy.
+	ClientSecret string `yaml:"client_secret"`
+	// Presence controls the presence handshake.
+	Presence PresenceConfig `yaml:"presence"`
+	// SDK controls the SDK package upload.
+	SDK SDKConfig `yaml:"sdk"`
+}
+
 // UpstreamsConfig groups every upstream the proxy knows about.
 type UpstreamsConfig struct {
 	// Official is the upstream for the official Mojang services.
@@ -118,6 +142,7 @@ func Default() *Config {
 	return &Config{
 		Server: ServerConfig{
 			Addr:            ":2777",
+			PublicURL:       "http://127.0.0.1:2777",
 			ReadTimeoutSec:  15,
 			WriteTimeoutSec: 15,
 		},
@@ -125,10 +150,18 @@ func Default() *Config {
 			Level:  "info",
 			Format: "text",
 		},
-		Presence: PresenceConfig{
-			Enabled:    true,
-			Name:       "WinnerProxy",
-			TTLSeconds: 0,
+		Hrpauth: HrpauthBackendConfig{
+			URL:          "http://127.0.0.1:2778",
+			ClientID:     "",
+			ClientSecret: "",
+			Presence: PresenceConfig{
+				Enabled:    true,
+				Name:       "WinnerProxy",
+				TTLSeconds: 0,
+			},
+			SDK: SDKConfig{
+				Enabled: true,
+			},
 		},
 		Cache: CacheConfig{
 			Size:   100 * 1024 * 1024, // 100 MiB

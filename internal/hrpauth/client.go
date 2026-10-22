@@ -40,6 +40,9 @@ var (
 	// ErrUpstream covers 5xx, network errors, timeouts, and JSON
 	// decode failures. The handler treats this as transient.
 	ErrUpstream = errors.New("hrpauth: upstream unavailable")
+
+	// ErrSDKPackageConflict means the SDK package already exists (409).
+	ErrSDKPackageConflict = errors.New("hrpauth: sdk package conflict")
 )
 
 // Client is a thin HTTP client for HRPAuth. One instance per WinnerProxy

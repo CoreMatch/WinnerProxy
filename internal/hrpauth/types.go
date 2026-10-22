@@ -51,15 +51,33 @@ type EnableMojangBindRequest struct {
 	Email string `json:"email,omitempty"`
 }
 
+// PresenceScope defines the areas covered by the service.
+type PresenceScope struct {
+	Name          string   `json:"name"`
+	FrontendAreas []string `json:"frontend_areas,omitempty"`
+}
+
 // PresenceRequest is the body of the microservice presence handshake
-// (POST /services/presence, the "bonjour" handshake). Only the fields
-// WinnerProxy uses are modeled; optional contract fields (scope,
-// sdk_url, security_level, interacts_with) are omitted and stay unset.
+// (POST /services/presence, the "bonjour" handshake).
 type PresenceRequest struct {
-	Name string `json:"name"`
-	// TTLSeconds is the self-declared lifetime in seconds; <=0 or
-	// omitted means the record never expires.
-	TTLSeconds int `json:"ttl_seconds"`
+	Name          string                 `json:"name"`
+	TTLSeconds    int                    `json:"ttl_seconds,omitempty"`
+	Scope         *PresenceScope         `json:"scope,omitempty"`
+	SDKURL        string                 `json:"sdk_url,omitempty"`
+	SecurityLevel int                    `json:"security_level"`
+	RootMetadata  map[string]interface{} `json:"root_metadata,omitempty"`
+}
+
+// RelayRule defines a single relay mapping.
+type RelayRule struct {
+	Dest   string `json:"dest"`
+	Source string `json:"source"`
+}
+
+// RegisterRelayRequest is the body of POST /services/relay.
+type RegisterRelayRequest struct {
+	Name   string      `json:"name"`
+	Relays []RelayRule `json:"relays"`
 }
 
 // CommonResponse is a generic HA response shape.
