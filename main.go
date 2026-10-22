@@ -67,10 +67,7 @@ func main() {
 	// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
 	// Registers the service and its relay rules.
 	if cfg.Hrpauth.Presence.Enabled {
-		// Fetch server meta from upstream HRPAuth to include in RootMetadata.
-		// This allows HRPAuth to aggregate WinnerProxy's Yggdrasil info.
-		meta, _ := hrpauthProxyCli.GetServerMeta()
-		announcePresence(hrpauthMgmtCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL, meta)
+		announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL)
 	}
 
 	services := []proxy.UpstreamService{
@@ -99,8 +96,15 @@ func main() {
 // HRPAuth asynchronously. It registers WinnerProxy in HRPAuth's
 // presence registry and registers relay rules; a failure is only logged
 // as a warning and never blocks or stops the main process.
-func announcePresence(cli *hrpauth.Client, cfg config.PresenceConfig, publicURL string, meta map[string]any) {
+func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, publicURL string) {
 	go func() {
+		log.Printf("Presence: starting microservice registration (name=%s)", cfg.Name)
+
+		// Fetch server meta from upstream HRPAuth to include in RootMetadata.
+		// This allows HRPAuth to aggregate WinnerProxy's Yggdrasil info.
+		// We do this inside the goroutine to avoid blocking startup.
+		meta, _ := proxyCli.GetServerMeta()
+
 		req := hrpauth.PresenceRequest{
 			Name:          cfg.Name,
 			TTLSeconds:    cfg.TTLSeconds,
@@ -114,21 +118,23 @@ func announcePresence(cli *hrpauth.Client, cfg config.PresenceConfig, publicURL 
 			},
 		}
 		if err := cli.RegisterPresence(req); err != nil {
-			log.Printf("WARN: presence handshake with hrpauth failed (proxy continues running): %v", err)
+			log.Printf("Presence: registration failed: %v", err)
 			return
 		}
-		log.Printf("presence handshake ok: registered as %q", cfg.Name)
+		log.Printf("Presence: microservice %q successfully registered (TTL=%ds)", cfg.Name, cfg.TTLSeconds)
 
 		if publicURL == "" {
+			log.Printf("Presence: skipping relay registration (public_url not configured)")
 			return
 		}
 
+		log.Printf("Presence: initiating relay registration for %s", publicURL)
 		relays := buildRelayRules(publicURL, "/yggdrasil")
 		if err := cli.RegisterRelay(cfg.Name, relays); err != nil {
-			log.Printf("WARN: relay registration failed (proxy continues running): %v", err)
+			log.Printf("Presence: relay registration failed: %v", err)
 			return
 		}
-		log.Printf("relay registration ok: %d paths registered under /yggdrasil", len(relays))
+		log.Printf("Presence: %d relay rules successfully active under /yggdrasil", len(relays))
 	}()
 }
 

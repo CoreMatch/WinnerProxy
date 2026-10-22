@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -158,16 +159,20 @@ func (c *Client) RegisterByProxy(username, mojangUUID, password string) (*Regist
 //	network err  → ErrUpstream
 //	other status → ErrUpstream
 func (c *Client) RegisterPresence(req PresenceRequest) error {
+	log.Printf("hrpauth: registering presence (name=%s, security_level=%d)", req.Name, req.SecurityLevel)
 	resp, err := c.doPost("/services/presence", req)
 	if err != nil {
+		log.Printf("hrpauth: presence registration request failed: %v", err)
 		return ErrUpstream
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
+		log.Printf("hrpauth: presence registration returned status %d", resp.StatusCode)
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return ErrUpstream
 	}
+	log.Printf("hrpauth: presence registration successful")
 	return nil
 }
 
@@ -242,23 +247,29 @@ func (c *Client) GetServerMeta() (map[string]any, error) {
 
 // RegisterRelay registers relay rules for the microservice.
 func (c *Client) RegisterRelay(name string, rules []RelayRule) error {
+	log.Printf("hrpauth: registering %d relay rules for %s", len(rules), name)
 	req := RegisterRelayRequest{
 		Name:   name,
 		Relays: rules,
 	}
 	resp, err := c.doPost("/services/relay", req)
 	if err != nil {
+		log.Printf("hrpauth: relay registration request failed: %v", err)
 		return ErrUpstream
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != 200 {
+		log.Printf("hrpauth: relay registration returned status %d", resp.StatusCode)
 		return ErrUpstream
 	}
+	log.Printf("hrpauth: relay registration successful")
 	return nil
 }
 
 // UploadSDKPackage uploads an SDK package archive to HRPAuth.
 func (c *Client) UploadSDKPackage(archive []byte, filename string) error {
+	log.Printf("hrpauth: uploading sdk package %s (%d bytes)", filename, len(archive))
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	part, err := mw.CreateFormFile("package", filename)
@@ -285,10 +296,12 @@ func (c *Client) UploadSDKPackage(archive []byte, filename string) error {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Printf("hrpauth: sdk upload request failed: %v", err)
 		return ErrUpstream
 	}
 	defer resp.Body.Close()
 
+	log.Printf("hrpauth: sdk upload returned status %d", resp.StatusCode)
 	switch resp.StatusCode {
 	case 200, 201:
 		return nil
@@ -301,6 +314,7 @@ func (c *Client) UploadSDKPackage(archive []byte, filename string) error {
 
 // DeleteSDKPackage deletes an SDK package from HRPAuth.
 func (c *Client) DeleteSDKPackage(name string) error {
+	log.Printf("hrpauth: deleting sdk package %s", name)
 	u, err := url.JoinPath(c.baseURL, "/services/sdk-packages/"+name)
 	if err != nil {
 		return err
@@ -313,10 +327,12 @@ func (c *Client) DeleteSDKPackage(name string) error {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		log.Printf("hrpauth: sdk delete request failed: %v", err)
 		return ErrUpstream
 	}
 	defer resp.Body.Close()
 
+	log.Printf("hrpauth: sdk delete returned status %d", resp.StatusCode)
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		return ErrUpstream
 	}

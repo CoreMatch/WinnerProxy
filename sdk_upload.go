@@ -87,33 +87,38 @@ func buildSDKArchive() ([]byte, error) {
 // never block or stop the proxy.
 func uploadSDKPackage(cli *hrpauth.Client) {
 	go func() {
+		log.Printf("SDK: starting sdk package aggregation process")
 		manifest, err := loadSDKManifest()
 		if err != nil {
-			log.Printf("WARN: load embedded sdk manifest failed (proxy continues running): %v", err)
+			log.Printf("SDK: load embedded manifest failed: %v", err)
 			return
 		}
+		log.Printf("SDK: manifest loaded (name=%s, version=%s)", manifest.Name, manifest.Version)
+
 		archive, err := buildSDKArchive()
 		if err != nil {
-			log.Printf("WARN: build sdk archive failed (proxy continues running): %v", err)
+			log.Printf("SDK: archive build failed: %v", err)
 			return
 		}
+		log.Printf("SDK: archive built successfully (%d bytes)", len(archive))
 
 		filename := manifest.Name + "-sdk.tar.gz"
 		if err := cli.UploadSDKPackage(archive, filename); err != nil {
 			if !errors.Is(err, hrpauth.ErrSDKPackageConflict) {
-				log.Printf("WARN: sdk package upload to HRPAuth failed (proxy continues running): %v", err)
+				log.Printf("SDK: upload to HRPAuth failed: %v", err)
 				return
 			}
-			log.Printf("sdk package %q already exists on HRPAuth, deleting and re-uploading", manifest.Name)
+			log.Printf("SDK: package %q already exists, performing stale cleanup...", manifest.Name)
 			if delErr := cli.DeleteSDKPackage(manifest.Name); delErr != nil {
-				log.Printf("WARN: delete stale sdk package failed (proxy continues running): %v", delErr)
+				log.Printf("SDK: cleanup failed: %v", delErr)
 				return
 			}
+			log.Printf("SDK: stale package deleted, retrying upload...")
 			if err := cli.UploadSDKPackage(archive, filename); err != nil {
-				log.Printf("WARN: sdk package re-upload after delete failed (proxy continues running): %v", err)
+				log.Printf("SDK: re-upload failed: %v", err)
 				return
 			}
 		}
-		log.Printf("sdk package %q (v%s) uploaded to HRPAuth", manifest.Name, manifest.Version)
+		log.Printf("SDK: package %q (v%s) successfully aggregated into HRPAuth", manifest.Name, manifest.Version)
 	}()
 }
