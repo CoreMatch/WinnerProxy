@@ -50,10 +50,40 @@ func main() {
 
 	// Management client for Presence, SDK, and Relay registration.
 	// Uses cfg.Hrpauth which points to the root backend.
+	// Fallback to upstream credentials if management credentials are not set.
+	mgmtURL := cfg.Hrpauth.URL
+	mgmtClientID := cfg.Hrpauth.ClientID
+	mgmtClientSecret := cfg.Hrpauth.ClientSecret
+
+	// If ClientID is missing, we assume the user hasn't configured the new 'hrpauth' section
+	// and we fallback to 'upstreams.hrpauth' credentials and URL.
+	if mgmtClientID == "" {
+		log.Printf("Presence: management credentials not set, falling back to upstream credentials")
+		mgmtClientID = cfg.Upstreams.Hrpauth.ClientID
+		mgmtClientSecret = cfg.Upstreams.Hrpauth.ClientSecret
+		// Also fallback URL if the management URL is just the default
+		if mgmtURL == "http://127.0.0.1:2778" && cfg.Upstreams.Hrpauth.URL != "" {
+			// Strip /yggdrasil-api/ if present in upstream URL to get the root
+			lowerURL := strings.ToLower(cfg.Upstreams.Hrpauth.URL)
+			if idx := strings.Index(lowerURL, "/yggdrasil-api"); idx != -1 {
+				mgmtURL = cfg.Upstreams.Hrpauth.URL[:idx]
+			} else {
+				mgmtURL = cfg.Upstreams.Hrpauth.URL
+			}
+			log.Printf("Presence: falling back to upstream URL (root): %s", mgmtURL)
+		}
+	} else {
+		log.Printf("Presence: using dedicated management credentials (client_id=%s)", mgmtClientID)
+	}
+
+	if mgmtClientID == "" {
+		log.Printf("WARN: No HRPAuth credentials found in config. Management tasks will fail.")
+	}
+
 	hrpauthMgmtCli := hrpauth.New(
-		cfg.Hrpauth.URL,
-		cfg.Hrpauth.ClientID,
-		cfg.Hrpauth.ClientSecret,
+		mgmtURL,
+		mgmtClientID,
+		mgmtClientSecret,
 		nil,
 	)
 

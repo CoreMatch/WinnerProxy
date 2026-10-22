@@ -65,7 +65,12 @@ func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 		}
 	}
 
-	// Per user decision: OAuth interface stays at the root path.
+	clientID = strings.TrimSpace(clientID)
+	clientSecret = strings.TrimSpace(clientSecret)
+
+	// Standard HRPAuth OAuth token endpoint is /oauth/token.
+	// We always use the root of the provided baseURL for the token endpoint
+	// to ensure it works even if a subpath (like /yggdrasil-api/) is provided.
 	tokenURL := "/oauth/token"
 	if u, err := url.Parse(baseURL); err == nil {
 		tokenURL = fmt.Sprintf("%s://%s/oauth/token", u.Scheme, u.Host)
