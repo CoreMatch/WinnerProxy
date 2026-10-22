@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -60,10 +62,16 @@ func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 		}
 	}
 
+	// Per user decision: OAuth interface stays at the root path.
+	tokenURL := "/oauth/token"
+	if u, err := url.Parse(baseURL); err == nil {
+		tokenURL = fmt.Sprintf("%s://%s/oauth/token", u.Scheme, u.Host)
+	}
+
 	conf := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		TokenURL:     strings.TrimRight(baseURL, "/") + "/oauth/token",
+		TokenURL:     tokenURL,
 	}
 
 	return &Client{
@@ -75,7 +83,10 @@ func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 // doGet issues a GET against path?query. The caller decides what each
 // status code means; this helper only builds the request and executes it.
 func (c *Client) doGet(path, query string) (*http.Response, error) {
-	u := c.baseURL + path
+	u, err := url.JoinPath(c.baseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	if query != "" {
 		u += "?" + query
 	}
@@ -94,7 +105,11 @@ func (c *Client) doPost(path string, body interface{}) (*http.Response, error) {
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, &buf)
+	u, err := url.JoinPath(c.baseURL, path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, u, &buf)
 	if err != nil {
 		return nil, err
 	}

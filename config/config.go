@@ -141,7 +141,7 @@ func Default() *Config {
 				Enabled:    true,
 			},
 			Hrpauth: HrpauthConfig{
-				URL:          "http://127.0.0.1:2778",
+				URL:          "http://127.0.0.1:2778/yggdrasil-api/",
 				ClientID:     "",
 				ClientSecret: "",
 				TimeoutSec:   10,

@@ -12,23 +12,20 @@ import (
 	"github.com/winnerproxy/winnerproxy/internal/hrpauth"
 )
 
-const (
-	mojangSessionserver = "https://sessionserver.mojang.com"
-	mojangMinecraftAPI  = "https://api.minecraftservices.com"
-)
-
-// MojangService talks to the official Mojang sessionserver. The wire
+// MojangService talks to the official Mojang services. The wire
 // PlayerProfile shape is identical to hrpauth.PlayerProfile, so we
 // decode directly into the shared type.
 type MojangService struct {
-	client *http.Client
+	baseURL string
+	client  *http.Client
 }
 
 // NewMojangService returns a MojangService with the given per-request
-// timeout. Pass 0 to disable the timeout.
-func NewMojangService(timeout time.Duration) *MojangService {
+// timeout and base URL. Pass 0 to disable the timeout.
+func NewMojangService(baseURL string, timeout time.Duration) *MojangService {
 	return &MojangService{
-		client: &http.Client{Timeout: timeout},
+		baseURL: baseURL,
+		client:  &http.Client{Timeout: timeout},
 	}
 }
 
@@ -37,7 +34,11 @@ func (m *MojangService) ID() string { return "mojang" }
 
 // HasJoined implements UpstreamService.
 func (m *MojangService) HasJoined(params url.Values) (*hrpauth.PlayerProfile, error) {
-	resp, err := m.client.Get(mojangSessionserver + "/session/minecraft/hasJoined?" + params.Encode())
+	u, err := url.JoinPath(m.baseURL, "/session/minecraft/hasJoined")
+	if err != nil {
+		return nil, hrpauth.ErrUpstream
+	}
+	resp, err := m.client.Get(u + "?" + params.Encode())
 	if err != nil {
 		return nil, hrpauth.ErrUpstream
 	}
@@ -60,8 +61,11 @@ func (m *MojangService) HasJoined(params url.Values) (*hrpauth.PlayerProfile, er
 
 // QueryProfile implements UpstreamService.
 func (m *MojangService) QueryProfile(uuid string, unsigned bool) (*hrpauth.PlayerProfile, error) {
-	resp, err := m.client.Get(fmt.Sprintf("%s/session/minecraft/profile/%s?unsigned=%t",
-		mojangSessionserver, uuid, unsigned))
+	u, err := url.JoinPath(m.baseURL, "/session/minecraft/profile/"+uuid)
+	if err != nil {
+		return nil, hrpauth.ErrUpstream
+	}
+	resp, err := m.client.Get(fmt.Sprintf("%s?unsigned=%t", u, unsigned))
 	if err != nil {
 		return nil, hrpauth.ErrUpstream
 	}
@@ -89,9 +93,11 @@ func (m *MojangService) BatchQuery(names []string) ([]*hrpauth.PlayerProfile, er
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost,
-		mojangMinecraftAPI+"/minecraft/profile/lookup/bulk/byname",
-		bytes.NewReader(data))
+	u, err := url.JoinPath(m.baseURL, "/minecraft/profile/lookup/bulk/byname")
+	if err != nil {
+		return nil, hrpauth.ErrUpstream
+	}
+	req, err := http.NewRequest(http.MethodPost, u, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}

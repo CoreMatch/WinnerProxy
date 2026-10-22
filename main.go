@@ -59,9 +59,13 @@ func main() {
 		proxy.NewHrpauthService(hrpauthCli),
 	}
 	if cfg.Upstreams.Official.Enabled {
-		mojang := proxy.NewMojangService(time.Duration(cfg.Upstreams.Official.TimeoutSec) * time.Second)
+		mojang := proxy.NewMojangService(
+			cfg.Upstreams.Official.URL,
+			time.Duration(cfg.Upstreams.Official.TimeoutSec)*time.Second,
+		)
 		services = append(services, mojang)
-		log.Printf("mojang upstream enabled (timeout=%ds)", cfg.Upstreams.Official.TimeoutSec)
+		log.Printf("mojang upstream enabled (url=%s, timeout=%ds)",
+			cfg.Upstreams.Official.URL, cfg.Upstreams.Official.TimeoutSec)
 	}
 
 	h := handler.New(services, hrpauthCli, buildCache(cfg.Cache))
