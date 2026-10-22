@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { getRealBackendUrl, buildServiceUrl } from '../utils/proxy';
@@ -61,30 +60,26 @@ export default function WinnerSetup() {
       </Typography>
 
       <Typography variant="body1">
-        WinnerProxy 是一个支持 HA-Contract 与 Mojang 双回源的 Yggdrasil 代理服务。
-        使用此代理地址，你可以同时登录 HA 账号与正版 Mojang 账号。
+        WinnerProxy 是一个支持 HRPAuth 与 Mojang 双回源的 Yggdrasil 代理服务。
+        使用此代理地址，你可以同时登录 HRPAuth 账号与正版 Mojang 账号。
       </Typography>
 
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Yggdrasil API 地址
-              </Typography>
-              <CodeBlock>{baseUrl}</CodeBlock>
-              <Button
-                variant="contained"
-                startIcon={<ContentCopyIcon />}
-                onClick={handleCopy}
-                sx={{ mt: 2 }}
-              >
-                {copied ? '已复制!' : '复制地址'}
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+            WinnerProxy API 地址
+          </Typography>
+          <CodeBlock>{baseUrl}</CodeBlock>
+          <Button
+            variant="contained"
+            startIcon={<ContentCopyIcon />}
+            onClick={handleCopy}
+            sx={{ mt: 2 }}
+          >
+            {copied ? '已复制!' : '复制地址'}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent>
@@ -94,22 +89,11 @@ export default function WinnerSetup() {
           <Box component="ol" sx={{ pl: 2, m: 0 }}>
             <li>
               <Typography variant="body2" sx={{ mb: 1 }}>
-                使用支持自定义身份验证服务器的启动器（如 HMCL, PCL2 等）。
-              </Typography>
+                使用Authlib Injector或Loki. </Typography>
             </li>
             <li>
               <Typography variant="body2" sx={{ mb: 1 }}>
-                在启动器的身份验证设置中，添加新的身份验证服务器。
-              </Typography>
-            </li>
-            <li>
-              <Typography variant="body2" sx={{ mb: 1 }}>
-                将上述 API 地址粘贴到服务器地址栏中。
-              </Typography>
-            </li>
-            <li>
-              <Typography variant="body2">
-                保存并使用该服务器进行登录。
+                Use Winnerproxy as upstream.
               </Typography>
             </li>
           </Box>
