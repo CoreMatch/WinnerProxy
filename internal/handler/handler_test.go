@@ -169,7 +169,7 @@ func newCache() *cache.FreeCache {
 
 // hasJoinedURL returns a sample hasJoined request path.
 func hasJoinedURL(name string) string {
-	return "/yggdrasil/sessionserver/session/minecraft/hasJoined?username=" +
+	return "/sessionserver/session/minecraft/hasJoined?username=" +
 		name + "&serverId=test"
 }
 
@@ -437,7 +437,7 @@ func TestQueryProfileCacheHit(t *testing.T) {
 	eng := buildRouter(t, srv, &fakeMojang{}, c)
 
 	w := doRequest(eng, http.MethodGet,
-		"/yggdrasil/sessionserver/session/minecraft/profile/cached-uuid?unsigned=true", "")
+		"/sessionserver/session/minecraft/profile/cached-uuid?unsigned=true", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d", w.Code)
 	}
@@ -463,7 +463,7 @@ func TestQueryProfileCacheMissThenHit(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		w := doRequest(eng, http.MethodGet,
-			"/yggdrasil/sessionserver/session/minecraft/profile/uuid-1?unsigned=true", "")
+			"/sessionserver/session/minecraft/profile/uuid-1?unsigned=true", "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("iter %d: status %d", i, w.Code)
 		}
@@ -483,7 +483,7 @@ func TestQueryProfileNotFound(t *testing.T) {
 	eng := buildRouter(t, srv, &fakeMojang{}, c)
 
 	w := doRequest(eng, http.MethodGet,
-		"/yggdrasil/sessionserver/session/minecraft/profile/ghost?unsigned=true", "")
+		"/sessionserver/session/minecraft/profile/ghost?unsigned=true", "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status: %d, want 404", w.Code)
 	}
@@ -503,7 +503,7 @@ func TestBatchQuery(t *testing.T) {
 
 	body := `["alice","bob"]`
 	w := doRequest(eng, http.MethodPost,
-		"/yggdrasil/api/profiles/minecraft", body)
+		"/api/profiles/minecraft", body)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d body: %s", w.Code, w.Body.String())
 	}
@@ -512,6 +512,22 @@ func TestBatchQuery(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "properties") {
 		t.Errorf("batch should not return properties, got %s", w.Body.String())
+	}
+}
+
+// TestBatchQueryMalformedBody covers the 400 error path of the batch
+// endpoint (contract winnerproxy-business.yaml /api/profiles/minecraft).
+func TestBatchQueryMalformedBody(t *testing.T) {
+	_, srv := newFakeHA(t)
+	c := newCache()
+	eng := buildRouter(t, srv, &fakeMojang{}, c)
+
+	w := doRequest(eng, http.MethodPost, "/api/profiles/minecraft", `{not-json`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"error"`) {
+		t.Errorf("expected a bare error object, got %s", w.Body.String())
 	}
 }
 
@@ -525,7 +541,7 @@ func TestYggdrasilRootPassThrough(t *testing.T) {
 	c := newCache()
 	eng := buildRouter(t, srv, &fakeMojang{}, c)
 
-	w := doRequest(eng, http.MethodGet, "/yggdrasil", "")
+	w := doRequest(eng, http.MethodGet, "/", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d", w.Code)
 	}
@@ -544,7 +560,7 @@ func TestYggdrasilRootFallback(t *testing.T) {
 	c := newCache()
 	eng := buildRouter(t, srv, &fakeMojang{}, c)
 
-	w := doRequest(eng, http.MethodGet, "/yggdrasil", "")
+	w := doRequest(eng, http.MethodGet, "/", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: %d", w.Code)
 	}
