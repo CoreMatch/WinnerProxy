@@ -222,7 +222,7 @@ func TestGetProfile_404(t *testing.T) {
 func TestBatchQuery_200(t *testing.T) {
 	var gotReq []string
 	mux, srv := newTestServer(t)
-	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotReq)
 		_ = json.NewEncoder(w).Encode([]*PlayerProfile{
 			{ID: "id1", Name: "alice"},
@@ -243,9 +243,22 @@ func TestBatchQuery_200(t *testing.T) {
 	}
 }
 
+func TestBatchQuery_404(t *testing.T) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+	})
+
+	c := newTestClient(t, srv.URL)
+	_, err := c.BatchQuery([]string{"alice"})
+	if err != ErrEndpointMissing {
+		t.Fatalf("expected ErrEndpointMissing, got %v", err)
+	}
+}
+
 func TestBatchQuery_5xx(t *testing.T) {
 	mux, srv := newTestServer(t)
-	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 	})
 

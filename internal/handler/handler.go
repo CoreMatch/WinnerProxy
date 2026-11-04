@@ -191,6 +191,11 @@ func (h *Handler) QueryProfile(c *gin.Context) {
 // BatchQuery forwards a list of usernames directly to HRPAuth. Only
 // {id, name} summary is returned; textures properties are dropped per
 // Yggdrasil convention.
+//
+// Upstream failures are mapped to explicit errors, never a bare 500:
+// an upstream 404 (route missing, e.g. relay-prefix drift) becomes 502
+// `{"error": "hrpauth batch endpoint missing"}`; any other upstream or
+// network failure becomes 502 `{"error": "hrpauth upstream unavailable"}`.
 func (h *Handler) BatchQuery(c *gin.Context) {
 	var names []string
 	if err := json.NewDecoder(c.Request.Body).Decode(&names); err != nil {
@@ -198,8 +203,14 @@ func (h *Handler) BatchQuery(c *gin.Context) {
 		return
 	}
 	profiles, err := h.Hrpauth.BatchQuery(names)
+	if errors.Is(err, hrpauth.ErrEndpointMissing) {
+		log.Printf("hrpauth batch endpoint missing (upstream 404); check relay prefix / contract drift")
+		c.JSON(http.StatusBadGateway, gin.H{"error": "hrpauth batch endpoint missing"})
+		return
+	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("hrpauth batch query failed: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "hrpauth upstream unavailable"})
 		return
 	}
 	type profileResult struct {

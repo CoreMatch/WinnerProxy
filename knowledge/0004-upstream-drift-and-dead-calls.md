@@ -22,14 +22,23 @@ shape. Several outbound calls no longer succeed.
 
 Verified drift items:
 
-1. **Batch query path is wrong (double prefix).**
-   `BatchQuery` posts to `{base}/yggdrasil/api/profiles/minecraft`. With
-   the default base `http://127.0.0.1:2778/yggdrasil-api/` this becomes
+1. **Batch query path is wrong (double prefix). — FIXED 2026-11-05,
+   commit `4ded866`.**
+   `BatchQuery` used to post to `{base}/yggdrasil/api/profiles/minecraft`.
+   With the default base `http://127.0.0.1:2778/yggdrasil-api/` this became
    `/yggdrasil-api/yggdrasil/api/profiles/minecraft`. The relay strips one
-   `/yggdrasil-api` prefix; the microservice then receives
+   `/yggdrasil-api` prefix; the microservice then received
    `/yggdrasil/api/profiles/minecraft`, which is not a registered route —
-   the call 404s and the handler answers 500. The upstream route is
-   `POST /api/profiles/minecraft` (no extra segment).
+   the call 404'd and the handler answered a bare 500. The upstream route
+   is `POST /api/profiles/minecraft` (no extra segment, HA-Contract
+   `docs/dev/HRPAuth/yggdrasil-api.md` §6). The fix drops the extra
+   `/yggdrasil` segment (the base URL already carries the relay prefix and
+   the relay strips it, so no double prefix occurs; a base URL pointing
+   directly at the microservice also works because it serves the same
+   prefix-less route) and maps upstream failures explicitly: upstream 404
+   → 502 `{"error": "hrpauth batch endpoint missing"}`, other
+   upstream/network failures → 502 `{"error": "hrpauth upstream
+   unavailable"}`. No bare 500 remains on this path.
 2. **Proxy registration does not succeed.**
    Stage 3 posts `{base}/register` with body
    `{username, password, email:"", mojang_uuid}` and expects
@@ -105,10 +114,12 @@ Verified drift items:
      The dead `DeclareEmail`/`EnableMojangBind` client methods and the dead
      `RegisterResponse.CBH` field were deleted from this repository; the
      archaeology above is kept as the historical record.
-4. **Stale code comment.** The `HasJoined` client comment claims "HA's
-   router does NOT use a /yggdrasil prefix" and cites the old monolith —
-   true only for the pre-split layout; the current deployment reaches the
-   Yggdrasil surface through the `/yggdrasil-api` relay prefix.
+4. **Stale code comment. — FIXED 2026-11-05, commit `4ded866`.** The
+   `HasJoined` client comment claimed "HA's router does NOT use a
+   /yggdrasil prefix" and cited the old monolith — true only for the
+   pre-split layout; the current deployment reaches the Yggdrasil surface
+   through the `/yggdrasil-api` relay prefix. The comment now describes
+   the relay-prefix semantics.
 5. **Deployment-config question (not verified).** The compose template sets
    `HRPAUTH_YGG_URL: http://hrpauth-yggdrasil-api:2770/yggdrasil-api/`
    (direct container address *with* the relay prefix). The microservice
@@ -119,10 +130,10 @@ Verified drift items:
 
 ## Consequences
 
-- Today, only hasJoined stages 1-2, profile query, and root metadata work
-  end-to-end against the current upstream; batch query and proxy
-  registration fail as described. HA-Contract's WinnerProxy contract
-  documents the same findings (see
+- Today, hasJoined stages 1-2, profile query, root metadata, and the batch
+  query (fixed 2026-11-05, commit `4ded866`) work end-to-end against the
+  current upstream; proxy registration still fails as described.
+  HA-Contract's WinnerProxy contract documents the same state (see
   [0005](./0005-contract-status.md)).
 - Fixing stage 3: the contract already names the intended path —
   `POST /internal/proxy-register` with `X-Internal-Key` obtained from
@@ -131,9 +142,16 @@ Verified drift items:
   lifecycle in WinnerProxy, response-shape adaptation, and whether the
   declare-email/mojang-bind follow-up flow is revived at all) — **pending
   author confirmation**; no code is changed in this knowledge pass.
-- Until fixed, operators should expect 500 on `POST /api/profiles/minecraft`
-  and 503 for Mojang players at join time; monitoring should not treat
-  these as outages of the proxy itself.
+- Until stage 3 is fixed, operators should expect 503 for Mojang players at
+  join time; monitoring should not treat these as outages of the proxy
+  itself. Batch-query failures now surface as 502 with an explicit
+  `{"error": ...}` reason (`hrpauth batch endpoint missing` on upstream
+  404, `hrpauth upstream unavailable` otherwise) instead of a bare 500.
+- Item 5 (compose `HRPAUTH_YGG_URL` with the relay prefix pointing at the
+  microservice container) is unchanged by the code fix: with that value the
+  batch call would still 404, now surfacing as the explicit 502
+  `hrpauth batch endpoint missing`. The compose template belongs to the
+  Deployer repository; the deployment-side value still needs verification.
 
 ## Evidence
 

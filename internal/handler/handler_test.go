@@ -93,7 +93,11 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	mux.HandleFunc("/yggdrasil/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
+	// The fake HA stands in for the upstream AFTER the core relay has
+	// stripped the /yggdrasil-api prefix: HRPAuth-Yggdrasil-API serves
+	// the batch route prefix-less (contract yggdrasil-api.md §6), so the
+	// correct path the client must hit is /api/profiles/minecraft.
+	mux.HandleFunc("/api/profiles/minecraft", func(w http.ResponseWriter, r *http.Request) {
 		ha.batchCalls.Add(1)
 		if ha.batch != nil {
 			ha.batch(w, r)
@@ -489,7 +493,10 @@ func TestQueryProfileNotFound(t *testing.T) {
 	}
 }
 
-// TestBatchQuery verifies the {id, name}-only summary.
+// TestBatchQuery verifies the {id, name}-only summary and that the
+// outbound call hits the fake upstream on the correct prefix-less path
+// (the mux only registers /api/profiles/minecraft; a double-prefixed
+// request would fall through to the 404 catch-all).
 func TestBatchQuery(t *testing.T) {
 	ha, srv := newFakeHA(t)
 	ha.batch = func(w http.ResponseWriter, r *http.Request) {
@@ -513,6 +520,9 @@ func TestBatchQuery(t *testing.T) {
 	if strings.Contains(w.Body.String(), "properties") {
 		t.Errorf("batch should not return properties, got %s", w.Body.String())
 	}
+	if ha.batchCalls.Load() != 1 {
+		t.Errorf("expected the upstream batch route to be hit once, got %d", ha.batchCalls.Load())
+	}
 }
 
 // TestBatchQueryMalformedBody covers the 400 error path of the batch
@@ -528,6 +538,46 @@ func TestBatchQueryMalformedBody(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"error"`) {
 		t.Errorf("expected a bare error object, got %s", w.Body.String())
+	}
+}
+
+// TestBatchQueryUpstreamNotFound covers an upstream 404 (route missing,
+// e.g. relay-prefix drift). The handler must answer 502 with an explicit
+// error string, never a bare 500.
+func TestBatchQueryUpstreamNotFound(t *testing.T) {
+	ha, srv := newFakeHA(t)
+	ha.batch = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}
+	c := newCache()
+	eng := buildRouter(t, srv, &fakeMojang{}, c)
+
+	w := doRequest(eng, http.MethodPost, "/api/profiles/minecraft", `["alice"]`)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502 (body=%s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"error":"hrpauth batch endpoint missing"`) {
+		t.Errorf("expected the explicit endpoint-missing error, got %s", w.Body.String())
+	}
+}
+
+// TestBatchQueryUpstreamError covers upstream 5xx / network failures.
+// The handler must answer 502 with an explicit error string, never a
+// bare 500.
+func TestBatchQueryUpstreamError(t *testing.T) {
+	ha, srv := newFakeHA(t)
+	ha.batch = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	c := newCache()
+	eng := buildRouter(t, srv, &fakeMojang{}, c)
+
+	w := doRequest(eng, http.MethodPost, "/api/profiles/minecraft", `["alice"]`)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502 (body=%s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"error":"hrpauth upstream unavailable"`) {
+		t.Errorf("expected the explicit upstream-unavailable error, got %s", w.Body.String())
 	}
 }
 

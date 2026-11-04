@@ -41,6 +41,11 @@ var (
 	// decode failures. The handler treats this as transient.
 	ErrUpstream = errors.New("hrpauth: upstream unavailable")
 
+	// ErrEndpointMissing means HA answered 404 for a route that is
+	// supposed to exist — typically relay-prefix or contract drift.
+	// The handler maps it to an explicit 502, never a bare 500.
+	ErrEndpointMissing = errors.New("hrpauth: endpoint missing (upstream 404)")
+
 	// ErrSDKPackageConflict means the SDK package already exists (409).
 	ErrSDKPackageConflict = errors.New("hrpauth: sdk package conflict")
 )
