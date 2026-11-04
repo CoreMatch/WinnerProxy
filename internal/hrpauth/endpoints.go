@@ -14,9 +14,11 @@ import (
 // is passed through verbatim so any future HA-side parameters (e.g. ip)
 // are supported without WinnerProxy changes.
 //
-// HA's router does NOT use a /yggdrasil prefix — it serves the
-// Yggdrasil API at the prefix-less path (see
-// HRPAuth-Backend-Go/main.go:106-127).
+// The path is relative to the configured base URL. By default the base
+// URL carries the /yggdrasil-api relay prefix
+// (http://host:2778/yggdrasil-api/) and the HRPAuth core relay strips
+// that prefix before forwarding to HRPAuth-Yggdrasil-API, which serves
+// the Yggdrasil routes prefix-less.
 //
 //	200 + body   → *PlayerProfile, nil
 //	200 + {}     → nil, ErrNoProfile   (HA's "not found" shape)
@@ -89,25 +91,39 @@ func (c *Client) GetProfile(uuid string, unsigned bool) (*PlayerProfile, error) 
 // Per Yggdrasil convention, only the {id, name} summary is returned; the
 // textures properties are deliberately dropped.
 //
+// The upstream endpoint is POST /api/profiles/minecraft on
+// HRPAuth-Yggdrasil-API with NO extra path segment (HA-Contract
+// docs/dev/HRPAuth/yggdrasil-api.md §6). The configured base URL already
+// carries the /yggdrasil-api relay prefix when the call goes through the
+// HRPAuth core relay, and the relay strips that prefix before forwarding,
+// so the path here must stay prefix-less (a /yggdrasil segment would
+// double-prefix and 404).
+//
 //	200 + body   → []*PlayerProfile, nil (may be empty)
+//	404          → nil, ErrEndpointMissing
 //	network err  → nil, ErrUpstream
 //	other status → nil, ErrUpstream
 func (c *Client) BatchQuery(names []string) ([]*PlayerProfile, error) {
-	resp, err := c.doPost("/yggdrasil/api/profiles/minecraft", names)
+	resp, err := c.doPost("/api/profiles/minecraft", names)
 	if err != nil {
 		return nil, ErrUpstream
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	switch resp.StatusCode {
+	case 200:
+		var out []*PlayerProfile
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return nil, ErrUpstream
+		}
+		return out, nil
+	case 404:
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, ErrEndpointMissing
+	default:
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, ErrUpstream
 	}
-	var out []*PlayerProfile
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, ErrUpstream
-	}
-	return out, nil
 }
 
 // RegisterByProxy performs an OAuth2-authenticated POST /register against HA.
