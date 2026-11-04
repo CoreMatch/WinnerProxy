@@ -51,7 +51,10 @@ breaks if HRPAuth changes.
    had call sites. They are the remains of an unfinished post-registration
    flow; see entry
    [0004](./0004-upstream-drift-and-dead-calls.md) item 3 for the full
-   archaeology.
+   archaeology. **Update 2026-11-05: both methods (and the dead
+   `RegisterResponse.CBH` field) were deleted after the author confirmed
+   declare-email deprecated with no successor; player-side email setting is
+   the claim flow (`/ha reg` → `/admin/claim-user` on HRPAuth-Yggdrasil-API).**
 
 ## Consequences
 
