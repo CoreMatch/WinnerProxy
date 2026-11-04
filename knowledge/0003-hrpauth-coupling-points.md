@@ -45,9 +45,13 @@ breaks if HRPAuth changes.
      `/minecraftservices`, `/register`) to this proxy's `public_url`.
    - `POST /services/sdk-packages` (and DELETE) — compile-time SDK package
      upload for the WEBUI.
-6. **Legacy client methods without call sites**: `DeclareEmail`
-   (`POST /user/declare-email`) and `EnableMojangBind`
-   (`POST /user/mojang-bind-enable`) — kept in the client, used nowhere.
+6. **Unwired client methods with removed upstream endpoints**:
+   `DeclareEmail` (`POST /user/declare-email`) and `EnableMojangBind`
+   (`POST /user/mojang-bind-enable`) exist in the client but have never
+   had call sites. They are the remains of an unfinished post-registration
+   flow; see entry
+   [0004](./0004-upstream-drift-and-dead-calls.md) item 3 for the full
+   archaeology.
 
 ## Consequences
 
@@ -57,10 +61,12 @@ breaks if HRPAuth changes.
 - The `security_level: 0` declaration is load-bearing: it is what lets
   unauthenticated Minecraft traffic pass the relay. Raising it requires a
   coordinated change.
-- Dead methods (item 6) imply endpoints that no longer exist on the core;
-  they are removal candidates but were left in place — the removal decision
-  is **pending author confirmation** (they document a former flow:
-  email declaration + Mojang-bind enabling after proxy registration).
+- Item 6 is **not ordinary dead code**: the upstream endpoints once existed
+  in HRPAuth core and were removed by the 2026-10-06 decoupling commit
+  `9ab4e64`; the WinnerProxy side was added 2026-08-07 (`f63f62b9`) but
+  never wired into any handler. Whether the flow is revived (and via which
+  upstream path) is **pending author confirmation**; until then the methods
+  stay in place as the only remaining record of the intended flow.
 - Config fallback (item 2) means a half-configed deployment silently reuses
   proxy credentials for management; the startup log says so, but operators
   should configure the `hrpauth` section explicitly.
@@ -78,8 +84,17 @@ breaks if HRPAuth changes.
   startup hook `main.go:90-95`; introduced by
   `53e6352bbc3e69ca29d4a49109a9a3f47ee8d393` ("feat: add WinnerProxy SDK
   and HRPAuth management", 2026-10-22).
-- Dead methods: `internal/hrpauth/endpoints.go:189-221`; no call sites
-  outside this file (verified by search, 2026-11-04); origin commit
+- Unwired methods: `internal/hrpauth/endpoints.go:189-221`; `git log
+  --all -S".DeclareEmail("` returns no commit — a call site has never
+  existed (verified 2026-11-04). Added by commit
   `f63f62b9a868f25b3a3cd0a7468b81b197090d62` ("feat(hrpauth): add email and
-  mojang bind support", 2026-08-07).
+  mojang bind support", 2026-08-07), which per its commit message added
+  "supporting type definitions" and the client methods only.
+- Upstream-side archaeology (repo HRPAuth @ `8dd67593`): routes
+  `POST /user/declare-email` and `POST /user/mojang-bind-enable` existed
+  (added `5ba9776`/`8ca74f3` 2026-07-29 and `12f22bc` 2026-07-09) and were
+  removed by `9ab4e64` ("refactor: strip legacy Yggdrasil stack and unused
+  cleanup services", 2026-10-06 21:15 +0800). Contract scope
+  `user.declare-email` for service-to-service calls: repo HA-Contract
+  (@ `21c7147d`), `docs/dev/HRPAuth/tokens.md:43`.
 - Default URLs: `config/config.go:156-186`.

@@ -53,7 +53,9 @@ implementation).
 - Cost: stage 3 depends on the upstream `/register` contract, which is
   currently drifted — see
   [0004](./0004-upstream-drift-and-dead-calls.md). While drifted, Mojang
-  players fail at stage 3 (503) even though stage 2 succeeded.
+  players fail at stage 3 (503) even though stage 2 succeeded. The
+  contract-sanctioned replacement path (`POST /internal/proxy-register`
+  with `X-Internal-Key`) is documented in entry 0004 item 2.
 - Cost: 204 is overloaded (no session / rejected bind); game servers treat
   both as "verification failed" by Yggdrasil convention — intentional.
 - Constraint: the flow returns Mojang properties with an HA profile id —
