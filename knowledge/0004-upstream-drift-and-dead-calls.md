@@ -99,6 +99,12 @@ Verified drift items:
      longer registers the routes either). Original auth design per
      `f63f62b9` was M.T. ("Maintenance Token") authentication; the current
      comment says OAuth2 — neither matches any live endpoint.
+   - **Update 2026-11-05**: the author confirmed declare-email deprecated
+     with no successor (player-side email setting is the claim flow `/ha
+     reg` → `/admin/claim-user`, now implemented on HRPAuth-Yggdrasil-API).
+     The dead `DeclareEmail`/`EnableMojangBind` client methods and the dead
+     `RegisterResponse.CBH` field were deleted from this repository; the
+     archaeology above is kept as the historical record.
 4. **Stale code comment.** The `HasJoined` client comment claims "HA's
    router does NOT use a /yggdrasil prefix" and cites the old monolith —
    true only for the pre-split layout; the current deployment reaches the
