@@ -64,21 +64,28 @@ implementation).
 
 ## Evidence
 
-- Flow implementation: `internal/handler/handler.go:45-146` (HEAD of
-  `main`, `86866128`); stage comments at `:49-53`.
-- HA empty-200 → ErrNoProfile: `internal/hrpauth/endpoints.go:26-53`
-  (comment `:39-42`, check `:43-45`); fix commit
+- Flow implementation: `internal/handler/handler.go::HasJoined` (HEAD of
+  `main`, `86866128`); stage comments at
+  `internal/handler/handler.go:L49-L53`.
+- HA empty-200 → ErrNoProfile: `internal/hrpauth/endpoints.go::HasJoined`
+  (comment `internal/hrpauth/endpoints.go:L39-L42`, check
+  `internal/hrpauth/endpoints.go:L43-L45`); fix commit
   `ec9311b5b7123d3a35d93592bd6eceaed68a12e5` ("fix: correct HRPAuth
   endpoint paths and handle empty 200 HA responses", 2026-07-09).
-- Mojang leg: `internal/proxy/mojang.go:36-60` (204/404 → ErrNoProfile).
-- Mojang username cache: `internal/handler/handler.go:78-104,117-120`.
-- Proxy-register call and error mapping: `internal/handler/handler.go:122-145`;
-  client `internal/hrpauth/endpoints.go:114-150`; random password
-  `internal/handler/handler.go:159-167`.
-- 204 on username_already_bound: `internal/handler/handler.go:88-91,131-134`;
-  sentinel `internal/hrpauth/client.go:32-34`.
-- Cache construction/defaults: `main.go:200-212`; `config/config.go:169-172`;
-  noop/freecache implementations `internal/cache/noop.go`,
-  `internal/cache/freecache.go`.
+- Mojang leg: `internal/proxy/mojang.go::HasJoined` (204/404 →
+  ErrNoProfile).
+- Mojang username cache: `internal/handler/handler.go::GetMojangProfile`,
+  `internal/handler/handler.go::SetMojangProfile`.
+- Proxy-register call and error mapping:
+  `internal/handler/handler.go::RegisterByProxy`; client
+  `internal/hrpauth/endpoints.go::RegisterByProxy`; random password
+  `internal/handler/handler.go::generatePassword`.
+- 204 on username_already_bound:
+  `internal/handler/handler.go::ErrUsernameBound`; sentinel
+  `internal/hrpauth/client.go::ErrUsernameBound`.
+- Cache construction/defaults: `main.go::buildCache`;
+  `config/config.go::Default`; noop/freecache implementations
+  `internal/cache/noop.go::NewNoop`,
+  `internal/cache/freecache.go::NewFreeCache`.
 - Flow introduction: commit `41f5ff14048b0b04ad236889fd6a9bab4d59c85f`
   (2026-07-09).

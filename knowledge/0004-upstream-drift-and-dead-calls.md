@@ -25,13 +25,15 @@ Verified drift items:
 1. **Batch query path is wrong (double prefix). — FIXED 2026-11-05,
    commit `4ded866`.**
    `BatchQuery` used to post to `{base}/yggdrasil/api/profiles/minecraft`.
-   With the default base `http://127.0.0.1:2778/yggdrasil-api/` this became
+   [xref] With the default base `http://127.0.0.1:2778/yggdrasil-api/` this
+   became
    `/yggdrasil-api/yggdrasil/api/profiles/minecraft`. The relay strips one
    `/yggdrasil-api` prefix; the microservice then received
    `/yggdrasil/api/profiles/minecraft`, which is not a registered route —
    the call 404'd and the handler answered a bare 500. The upstream route
    is `POST /api/profiles/minecraft` (no extra segment, HA-Contract
-   `docs/dev/HRPAuth/yggdrasil-api.md` §6). The fix drops the extra
+   `/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/yggdrasil-api.md`
+   §6). The fix drops the extra
    `/yggdrasil` segment (the base URL already carries the relay prefix and
    the relay strips it, so no double prefix occurs; a base URL pointing
    directly at the microservice also works because it serves the same
@@ -53,19 +55,22 @@ Verified drift items:
    **Contract-sanctioned path (reported only; no code change yet):** the
    contract's purpose-built endpoint is `POST /internal/proxy-register`
    (repo HA-Contract @ `21c7147d`,
-   `docs/api/openapi/hrpauth-yggdrasil-business.yaml:322-345`):
+   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: /internal/proxy-register)`):
    authenticated via the `X-Internal-Key` header (parameter definition at
-   `:357-363` — "Temporary internal key issued by HRPAuth Core
+   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: InternalKeyHeader)`
+   — "Temporary internal key issued by HRPAuth Core
    (`POST /services/auth-key`)"), body `{username, password,
    mojang_uuid}`, response `data: {account_id, profile_id}`. The internal
    key itself is obtained from HRPAuth via `POST /services/auth-key`
    authenticated with a client-credentials Bearer
-   (`docs/dev/HRPAuth/microservices.md:97-118`). Additional mismatches a
+   (`/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/microservices.md (field: /services/auth-key)`).
+   Additional mismatches a
    future fix must handle: the contract response carries `profile_id` but
    not `uid`/`cbh` (the `cbh` mechanism was removed from HRPAuth by commit
    `2efc6e2` "feat: add yggdrasil account claim and remove cbh code",
    2026-10-07, while `RegisterResponse.CBH` still exists in
-   `internal/hrpauth/types.go:34-40`), and the contract's error set
+   `internal/hrpauth/types.go:L34-L40 @ 86866128`), and the contract's
+   error set
    (400/401/500) differs from the 409/400 codes the client maps.
 3. **Unwired client methods — decoupling leftovers, not ordinary dead
    code.** `DeclareEmail` (`POST /user/declare-email`) and
@@ -79,7 +84,7 @@ Verified drift items:
      2026-07-09, together with the register-flow overhaul); both were still
      present through the OAuth2 work (`f92f9ce`, 2026-08-19, which lists
      the service-to-service scope `user.declare-email` — HA-Contract
-     `docs/dev/HRPAuth/tokens.md:43`).
+     [xref] `docs/dev/HRPAuth/tokens.md:L43`).
    - Both were **removed on 2026-10-06** by
      `9ab4e64` ("refactor: strip legacy Yggdrasil stack and unused cleanup
      services", 21:15 +0800) — the decoupling commit that deleted the
@@ -96,7 +101,8 @@ Verified drift items:
      implemented and then dropped by the decoupling (no successor for
      declare-email anywhere; mojang-bind survives only as player
      self-service `POST /player/mojang-bind-enable` on Yggdrasil-API,
-     Bearer-authenticated, `hrpauth-yggdrasil-business.yaml:266-293`),
+     Bearer-authenticated,
+     `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: /player/mojang-bind-enable)`),
      while the WinnerProxy side was never wired up. Evidence is sufficient
      for this verdict; what is **not** recoverable from the repos is
      whether a handler-level integration was ever planned in detail —
@@ -121,7 +127,7 @@ Verified drift items:
    through the `/yggdrasil-api` relay prefix. The comment now describes
    the relay-prefix semantics.
 5. **Deployment-config question (not verified).** The compose template sets
-   `HRPAUTH_YGG_URL: http://hrpauth-yggdrasil-api:2770/yggdrasil-api/`
+   [xref] `HRPAUTH_YGG_URL: http://hrpauth-yggdrasil-api:2770/yggdrasil-api/`
    (direct container address *with* the relay prefix). The microservice
    serves prefix-less routes and the HRPAuth relay is what strips the
    prefix, so this value looks inconsistent with the design; it may be
@@ -155,23 +161,30 @@ Verified drift items:
 
 ## Evidence
 
-- Batch query path: `internal/hrpauth/endpoints.go:96-112` (URL at `:97`),
-  HEAD of `main` `86866128`; handler error mapping
-  `internal/handler/handler.go:194-214`.
+- Batch query path: `internal/hrpauth/endpoints.go:L96-L112 @ 86866128`
+  (URL at `internal/hrpauth/endpoints.go:L97 @ 86866128`), HEAD of `main`
+  `86866128`; handler error mapping
+  `internal/handler/handler.go:L194-L214 @ 86866128`.
 - Upstream batch route: repo HRPAuth-Yggdrasil-API (@ `124b2fa1`),
-  `main.go:181-183` (`api.POST("/profiles/minecraft", ...)` under
-  `r.Group("/api")`).
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go::BatchProfiles`
+  (`api.POST("/profiles/minecraft", ...)` under `r.Group("/api")`).
 - Relay prefix stripping: repo HRPAuth (@ `8dd67593`),
-  `controllers/relay_controller.go:172-199,283-316`.
-- Register body sent: `internal/hrpauth/types.go:23-29`; response
-  expectation `:31-37`; client mapping `internal/hrpauth/endpoints.go:114-150`.
+  `/home/lnb/Desktop/HA/HRPAuth/controllers/relay_controller.go::Match`,
+  `/home/lnb/Desktop/HA/HRPAuth/controllers/relay_controller.go::RelayMiddleware`.
+- Register body sent: `internal/hrpauth/types.go::RegisterRequest`;
+  response expectation `internal/hrpauth/types.go::RegisterResponse`;
+  client mapping `internal/hrpauth/endpoints.go::RegisterByProxy`.
 - Upstream register contract: repo HRPAuth-Yggdrasil-API,
-  `controllers/register_controller.go:21-25` (`identifier`/`password`
-  required), `:28-48` (400 on bind failure, 403 on service error);
-  route `main.go:148`.
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/controllers/register_controller.go::RegisterGameAccountRequest`
+  (`identifier`/`password` required),
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/controllers/register_controller.go::Register`
+  (400 on bind failure, 403 on service error); route
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go::Register`.
 - Proxy-register endpoint + X-Internal-Key: repo HRPAuth-Yggdrasil-API,
-  `controllers/internal_controller.go:31-46`, route `main.go:149`.
-- Unwired methods: `internal/hrpauth/endpoints.go:189-221`; archaeology
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/controllers/internal_controller.go::ProxyRegister`,
+  route `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go::ProxyRegister`.
+- Unwired methods: `internal/hrpauth/endpoints.go:L189-L221 @ 86866128`;
+  archaeology
   evidence (repo HRPAuth @ `8dd67593`): introduction commits `8ca74f3`,
   `5ba9776` (2026-07-29, declare-email), `12f22bc` (2026-07-09,
   mojang-bind), removal commit `9ab4e64` (2026-10-06 21:15 +0800, route
@@ -180,15 +193,21 @@ Verified drift items:
   only, no call site ever — `git log --all -S".DeclareEmail("` empty);
   `AuthType` added in `f63f62b9`, removed by `05ffc49` (2026-08-23).
   Contract scope `user.declare-email`: repo HA-Contract (@ `21c7147d`),
-  `docs/dev/HRPAuth/tokens.md:43`. Current mojang-bind successor:
-  repo HRPAuth-Yggdrasil-API, `main.go:157-158`
+  [xref] `docs/dev/HRPAuth/tokens.md:L43`. Current mojang-bind successor:
+  repo HRPAuth-Yggdrasil-API,
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go::EnableMojangBind`
   (`/player/mojang-bind-enable|disable`, player self-service).
-- Stale comment: `internal/hrpauth/endpoints.go:14-20`.
+- Stale comment: `internal/hrpauth/endpoints.go:L14-L20 @ 86866128`.
 - Compose value: repo HA-Services-Deployer (@ `657bcb88`),
-  `deploy/docker-compose.yml:136`; microservice serves prefix-less routes:
-  repo HRPAuth-Yggdrasil-API, `main.go:147-200`; relay prefix is a
-  core-side concept: `config/config.go:36-40,127` (`RelayPathPrefix` =
+  `/home/lnb/Desktop/HA/HA-Services-Deployer/deploy/docker-compose.yml (field: HRPAUTH_YGG_URL)`;
+  microservice serves prefix-less routes:
+  repo HRPAuth-Yggdrasil-API,
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go:L148-L200`; relay
+  prefix is a core-side concept:
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/config/config.go::RelayPathPrefix`,
+  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/config/config.go::DefaultRelayPathPrefix`
+  (`RelayPathPrefix` =
   "the path prefix on the Core side that relays to this service").
 - Contract-side record of the same drift: repo HA-Contract (@ `21c7147d`),
-  `docs/dev/WinnerProxy/README.md`, "Outbound Calls (current
-  implementation)" table.
+  `/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md (field: Outbound Calls)`,
+  "Outbound Calls (current implementation)" table.

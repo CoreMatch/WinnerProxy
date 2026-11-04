@@ -19,15 +19,18 @@ which HA-Contract documents for the whole ecosystem.
 
 1. **Current state (updated 2026-11-05):** WinnerProxy's external
    behavior is documented by:
-   - HA-Contract `docs/api/openapi/winnerproxy-business.yaml` — added by
-     the 2026-11-05 contract-coverage audit (HA-Contract `c72bf82`) and
-     wired into HA-Contract's method-level drift check.
-   - HA-Contract `docs/dev/WinnerProxy/README.md` — "WinnerProxy Service
-     Contract": inbound route table, outbound call table, configuration
-     notes.
-   - HA-Contract Yggdrasil documentation (`docs/dev/HRPAuth/yggdrasil-api.md`,
-     `docs/api/openapi/hrpauth-yggdrasil-business.yaml`) for the upstream
-     semantics WinnerProxy passes through.
+   - HA-Contract
+     `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/winnerproxy-business.yaml`
+     — added by the 2026-11-05 contract-coverage audit (HA-Contract
+     `c72bf82`) and wired into HA-Contract's method-level drift check.
+   - HA-Contract
+     `/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md`
+     — "WinnerProxy Service Contract": inbound route table, outbound call
+     table, configuration notes.
+   - HA-Contract Yggdrasil documentation
+     (`/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/yggdrasil-api.md`,
+     `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml`)
+     for the upstream semantics WinnerProxy passes through.
 2. **Handling policy** (unchanged):
    - The implementation reference is the code plus the HA-Contract dev
      contract; this repo's README stays deployment-oriented (config file
@@ -51,11 +54,13 @@ which HA-Contract documents for the whole ecosystem.
 
 ## Evidence
 
-- OpenAPI file: repo HA-Contract, `docs/api/openapi/winnerproxy-business.yaml`,
+- OpenAPI file: repo HA-Contract,
+  `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/winnerproxy-business.yaml`,
   added by `c72bf82` ("contract: add WinnerProxy business API spec
   (coverage audit)", 2026-11-05).
-- Dev contract: repo HA-Contract, `docs/dev/WinnerProxy/README.md`
+- Dev contract: repo HA-Contract,
+  `/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md`
   (inbound surface table; outbound call table).
-- This repo's README scope (deployment/config only): `README.md:1-19`.
+- This repo's README scope (deployment/config only): `README.md:L1-L18`.
 - Yggdrasil protocol documentation pointers: repo HA-Contract,
-  `docs/api/README.md` (External Protocol Compliance section).
+  `/home/lnb/Desktop/HA/HA-Contract/docs/api/README.md (field: External Protocol Compliance)`.
