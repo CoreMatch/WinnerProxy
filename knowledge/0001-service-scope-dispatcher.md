@@ -54,26 +54,30 @@ account origin** — explicitly *not* a generic multi-upstream proxy pool:
   externally visible behavior and belongs to HA-Contract's process, not a
   local decision.
 - The authoritative inbound/outbound table lives in HA-Contract
-  (`docs/dev/WinnerProxy/README.md`); this entry records the internal
-  dispatch design.
+  (`/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md`);
+  this entry records the internal dispatch design.
 
 ## Evidence
 
-- Route binding (dual prefix): `internal/router/router.go:13-32` (HEAD of
-  `main`, `86866128`).
+- Route binding (dual prefix): `internal/router/router.go::bindYggdrasil`
+  (HEAD of `main`, `86866128`).
 - Handler dispatch comments and per-route upstream choice:
-  `internal/handler/handler.go:20-27` (overview), `:172-189` (QueryProfile
-  → HRPAuth), `:194-214` (BatchQuery → HRPAuth), `:220-227` (YggdrasilRoot
-  → HRPAuth meta).
-- Mojang used only in hasJoined: `internal/handler/handler.go:106-115`
-  (`findMojang` called only here); `:150-157` (`findMojang`).
-- Unused Mojang methods: `internal/proxy/mojang.go:63-124`
+  `internal/handler/handler.go::Handler` (overview),
+  `internal/handler/handler.go::QueryProfile` (QueryProfile → HRPAuth),
+  `internal/handler/handler.go::BatchQuery` (BatchQuery → HRPAuth),
+  `internal/handler/handler.go::YggdrasilRoot` (YggdrasilRoot → HRPAuth
+  meta).
+- Mojang used only in hasJoined: `internal/handler/handler.go::HasJoined`
+  (`findMojang` called only here); `internal/handler/handler.go::findMojang`
+  (`findMojang`).
+- Unused Mojang methods: `internal/proxy/mojang.go::QueryProfile`,
+  `internal/proxy/mojang.go::BatchQuery`
   (QueryProfile/BatchQuery implemented, no handler call site — verified by
   searching call sites, 2026-11-04).
-- Interface symmetry note: `internal/proxy/upstream.go:12-19`.
-- Mojang toggle: `main.go:106-114`; default upstream config
-  `config/config.go:173-186` (`official` = `https://api.minecraftservices.com`,
-  `hrpauth` = `http://127.0.0.1:2778/yggdrasil-api/`).
+- Interface symmetry note: `internal/proxy/upstream.go::UpstreamService`.
+- Mojang toggle: `main.go:L106-L114`; default upstream config
+  `config/config.go::Default` (`official` = `https://api.minecraftservices.com`,
+  [xref] `hrpauth` = `http://127.0.0.1:2778/yggdrasil-api/`).
 - Commits: `41f5ff14048b0b04ad236889fd6a9bab4d59c85f` ("feat: replace
   HasJoined with three-stage HA-first flow", 2026-07-09);
   `a729f4e6f3fcff45591481da6d4e7fad999161fc` ("feat: rebrand to winnerproxy

@@ -76,18 +76,24 @@ breaks if HRPAuth changes.
 
 ## Evidence
 
-- OAuth2 wiring: `internal/hrpauth/client.go:58-89` (token URL derivation
-  at `:71-77`); introduced by `05ffc498e6de294865e1d5934a177a5b9317025a`
+- OAuth2 wiring: `internal/hrpauth/client.go::New` (token URL derivation
+  at `internal/hrpauth/client.go::tokenURL`); introduced by
+  `05ffc498e6de294865e1d5934a177a5b9317025a`
   ("refactor(hrpauth): use OAuth2 client credentials", 2026-08-23).
-- Two clients + fallback: `main.go:44-88` (HEAD of `main`, `86866128`).
+- Two clients + fallback: `main.go::hrpauthMgmtCli` (HEAD of `main`,
+  `86866128`).
 - Presence request fields (security_level 0, sdk_url, root_metadata):
-  `main.go:129-155`; type `internal/hrpauth/types.go:45-54`.
-- Relay path list: `main.go:172-198`.
-- SDK package upload/delete: `internal/hrpauth/endpoints.go:235-305`;
-  startup hook `main.go:90-95`; introduced by
+  `main.go::announcePresence`; type
+  `internal/hrpauth/types.go::PresenceRequest`.
+- Relay path list: `main.go::buildRelayRules`.
+- SDK package upload/delete:
+  `internal/hrpauth/endpoints.go::UploadSDKPackage`,
+  `internal/hrpauth/endpoints.go::DeleteSDKPackage`; startup hook
+  `main.go::uploadSDKPackage`; introduced by
   `53e6352bbc3e69ca29d4a49109a9a3f47ee8d393` ("feat: add WinnerProxy SDK
   and HRPAuth management", 2026-10-22).
-- Unwired methods: `internal/hrpauth/endpoints.go:189-221`; `git log
+- Unwired methods: `internal/hrpauth/endpoints.go:L189-L221 @ 86866128`
+  (methods deleted 2026-11-05); `git log
   --all -S".DeclareEmail("` returns no commit — a call site has never
   existed (verified 2026-11-04). Added by commit
   `f63f62b9a868f25b3a3cd0a7468b81b197090d62` ("feat(hrpauth): add email and
@@ -99,5 +105,5 @@ breaks if HRPAuth changes.
   removed by `9ab4e64` ("refactor: strip legacy Yggdrasil stack and unused
   cleanup services", 2026-10-06 21:15 +0800). Contract scope
   `user.declare-email` for service-to-service calls: repo HA-Contract
-  (@ `21c7147d`), `docs/dev/HRPAuth/tokens.md:43`.
-- Default URLs: `config/config.go:156-186`.
+  [xref] (@ `21c7147d`), `docs/dev/HRPAuth/tokens.md:L43`.
+- Default URLs: `config/config.go::Default`.
