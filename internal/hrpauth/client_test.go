@@ -320,7 +320,6 @@ func TestRegisterByProxy_200(t *testing.T) {
 			UID:       42,
 			Message:   "Register successful",
 			ProfileID: "f7c77d999f154a66a87dc4a51ef30d19",
-			CBH:       0,
 		})
 	})
 
@@ -329,7 +328,7 @@ func TestRegisterByProxy_200(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.ProfileID != "f7c77d999f154a66a87dc4a51ef30d19" || got.CBH != 0 || got.UID != 42 {
+	if got.ProfileID != "f7c77d999f154a66a87dc4a51ef30d19" || got.UID != 42 {
 		t.Errorf("unexpected response: %+v", got)
 	}
 	if gotBody.Username != "alice" || gotBody.MojangUUID != "f7c77d999f154a66a87dc4a51ef30d19" {

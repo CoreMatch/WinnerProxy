@@ -29,26 +29,11 @@ type RegisterRequest struct {
 }
 
 // RegisterResponse is what HA returns on a successful POST /register.
-// CBH is populated only when a brand-new proxy-registered account is
-// created (cbh=0); idempotent and bind paths leave it zero.
 type RegisterResponse struct {
 	Success   bool   `json:"success"`
 	UID       int64  `json:"uid"`
 	Message   string `json:"message"`
 	ProfileID string `json:"profile_id"`
-	CBH       int    `json:"cbh,omitempty"`
-}
-
-// DeclareEmailRequest is the body for POST /user/declare-email.
-type DeclareEmailRequest struct {
-	Email      string `json:"email"`
-	PlayerName string `json:"playername"`
-}
-
-// EnableMojangBindRequest is the body for POST /user/mojang-bind-enable.
-type EnableMojangBindRequest struct {
-	UID   string `json:"uid,omitempty"`
-	Email string `json:"email,omitempty"`
 }
 
 // PresenceScope defines the areas covered by the service.

@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"strconv"
 )
 
 // HasJoined forwards the Yggdrasil hasJoined request to HA. The query
@@ -184,40 +183,6 @@ func decodeErrorBody(r io.Reader) string {
 	}
 	_ = json.NewDecoder(r).Decode(&eb)
 	return eb.Error
-}
-
-// DeclareEmail updates a user's email using OAuth2 authentication.
-func (c *Client) DeclareEmail(email, playername string) error {
-	body := DeclareEmailRequest{
-		Email:      email,
-		PlayerName: playername,
-	}
-	resp, err := c.doPost("/user/declare-email", body)
-	if err != nil {
-		return ErrUpstream
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return ErrUpstream
-	}
-	return nil
-}
-
-// EnableMojangBind enables the mbe (Mojang Bind Enabled) flag for a user
-// using OAuth2 authentication.
-func (c *Client) EnableMojangBind(uid int64) error {
-	body := EnableMojangBindRequest{
-		UID: strconv.FormatInt(uid, 10),
-	}
-	resp, err := c.doPost("/user/mojang-bind-enable", body)
-	if err != nil {
-		return ErrUpstream
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return ErrUpstream
-	}
-	return nil
 }
 
 // GetServerMeta fetches HA's Yggdrasil root metadata (skinDomains,
