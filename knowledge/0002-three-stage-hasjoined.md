@@ -66,14 +66,14 @@ implementation).
 
 - Flow implementation: `internal/handler/handler.go:45-146` (HEAD of
   `main`, `86866128`); stage comments at `:49-53`.
-- HA empty-200 → ErrNoProfile: `internal/hrpauth/endpoints.go:27-54`
-  (comment `:40-43`, check `:44-46`); fix commit
+- HA empty-200 → ErrNoProfile: `internal/hrpauth/endpoints.go:26-53`
+  (comment `:39-42`, check `:43-45`); fix commit
   `ec9311b5b7123d3a35d93592bd6eceaed68a12e5` ("fix: correct HRPAuth
   endpoint paths and handle empty 200 HA responses", 2026-07-09).
 - Mojang leg: `internal/proxy/mojang.go:36-60` (204/404 → ErrNoProfile).
 - Mojang username cache: `internal/handler/handler.go:78-104,117-120`.
 - Proxy-register call and error mapping: `internal/handler/handler.go:122-145`;
-  client `internal/hrpauth/endpoints.go:114-151`; random password
+  client `internal/hrpauth/endpoints.go:114-150`; random password
   `internal/handler/handler.go:159-167`.
 - 204 on username_already_bound: `internal/handler/handler.go:88-91,131-134`;
   sentinel `internal/hrpauth/client.go:32-34`.

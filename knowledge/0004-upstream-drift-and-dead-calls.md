@@ -146,7 +146,7 @@ Verified drift items:
 - Relay prefix stripping: repo HRPAuth (@ `8dd67593`),
   `controllers/relay_controller.go:172-199,283-316`.
 - Register body sent: `internal/hrpauth/types.go:23-29`; response
-  expectation `:31-40`; client mapping `internal/hrpauth/endpoints.go:114-151`.
+  expectation `:31-37`; client mapping `internal/hrpauth/endpoints.go:114-150`.
 - Upstream register contract: repo HRPAuth-Yggdrasil-API,
   `controllers/register_controller.go:21-25` (`identifier`/`password`
   required), `:28-48` (400 on bind failure, 403 on service error);

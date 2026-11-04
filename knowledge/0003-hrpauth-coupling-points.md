@@ -81,9 +81,9 @@ breaks if HRPAuth changes.
   ("refactor(hrpauth): use OAuth2 client credentials", 2026-08-23).
 - Two clients + fallback: `main.go:44-88` (HEAD of `main`, `86866128`).
 - Presence request fields (security_level 0, sdk_url, root_metadata):
-  `main.go:129-155`; type `internal/hrpauth/types.go:60-69`.
+  `main.go:129-155`; type `internal/hrpauth/types.go:45-54`.
 - Relay path list: `main.go:172-198`.
-- SDK package upload/delete: `internal/hrpauth/endpoints.go:270-340`;
+- SDK package upload/delete: `internal/hrpauth/endpoints.go:235-305`;
   startup hook `main.go:90-95`; introduced by
   `53e6352bbc3e69ca29d4a49109a9a3f47ee8d393` ("feat: add WinnerProxy SDK
   and HRPAuth management", 2026-10-22).
