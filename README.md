@@ -4,14 +4,10 @@
 
 ## 配置
 
-- 配置文件：工作目录下的 `config.yml`，首次启动自动生成；当 stdin 是终端
-  时会交互式提示输入 OAuth2 client secret。
-- 默认监听地址 `:2777`。
-- 主要配置段：
-  - `server`：`addr`（监听地址）、`public_url`（对外可达地址）
-  - `upstreams.hrpauth`：`url`（HA 上游地址，默认含 `/yggdrasil-api` relay
-    前缀）、`client_id`、`client_secret`（OAuth2 凭据）
-  - Mojang 上游设置、link-token 校验缓存设置
+配置文件为工作目录下的 `config.yml`（首次启动自动生成），默认监听
+`:2777`。完整配置参考见
+[SamuelWiki — WinnerProxy 配置说明](https://github.com/SamuelCheston/SamuelWiki/blob/main/docs/zh/projects/winnerproxy/configuration.md)
+（[English](https://github.com/SamuelCheston/SamuelWiki/blob/main/docs/projects/winnerproxy/configuration.md)）。
 
 ## 文档
 
