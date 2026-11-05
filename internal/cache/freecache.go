@@ -15,8 +15,8 @@ const (
 	// Key prefixes isolate the two namespaces inside the single
 	// freecache instance. HA profiles and Mojang profiles live in
 	// the same store but with disjoint key sets.
-	keyPrefixHA      = "ha:profile:"
-	keyPrefixMojang  = "mojang:hasjoined:"
+	keyPrefixHA     = "ha:profile:"
+	keyPrefixMojang = "mojang:hasjoined:"
 	// valueOverhead is the approximate fixed bytes per entry that
 	// freecache accounts for beyond the raw key+value.
 	valueOverhead = 64
