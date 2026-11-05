@@ -41,37 +41,27 @@ Verified drift items:
    → 502 `{"error": "hrpauth batch endpoint missing"}`, other
    upstream/network failures → 502 `{"error": "hrpauth upstream
    unavailable"}`. No bare 500 remains on this path.
-2. **Proxy registration does not succeed.**
-   Stage 3 posts `{base}/register` with body
-   `{username, password, email:"", mojang_uuid}` and expects
-   `{success, uid, message, profile_id, cbh}` plus 409
-   `username_already_bound` / 400 `invalid_mojang_uuid` semantics. The
-   current upstream `POST /register` binds
-   `{identifier (required), password (required), mojang_uuid}` — the
-   `username` field does not satisfy `identifier`, so the request fails
-   400 (invalid body) and the response shape/error codes differ from what
-   the client maps. Net effect: stage 3 fails → hasJoined returns 503 for
-   Mojang players.
-   **Contract-sanctioned path (reported only; no code change yet):** the
-   contract's purpose-built endpoint is `POST /internal/proxy-register`
-   (repo HA-Contract @ `21c7147d`,
-   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: /internal/proxy-register)`):
-   authenticated via the `X-Internal-Key` header (parameter definition at
-   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: InternalKeyHeader)`
-   — "Temporary internal key issued by HRPAuth Core
-   (`POST /services/auth-key`)"), body `{username, password,
-   mojang_uuid}`, response `data: {account_id, profile_id}`. The internal
-   key itself is obtained from HRPAuth via `POST /services/auth-key`
-   authenticated with a client-credentials Bearer
-   (`/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/microservices.md (field: /services/auth-key)`).
-   Additional mismatches a
-   future fix must handle: the contract response carries `profile_id` but
-   not `uid`/`cbh` (the `cbh` mechanism was removed from HRPAuth by commit
-   `2efc6e2` "feat: add yggdrasil account claim and remove cbh code",
-   2026-10-07, while `RegisterResponse.CBH` still exists in
-   `internal/hrpauth/types.go:L34-L40 @ 86866128`), and the contract's
-   error set
-   (400/401/500) differs from the 409/400 codes the client maps.
+2. **Proxy registration called the wrong endpoint. — FIXED 2026-11-05,
+   commit `6c24770`.**
+   Stage 3 posted the pre-split public `POST /register` shape
+   (`{username, password, email, mojang_uuid}`), but after the split the
+   public `/register` requires a core user's own `identifier` +
+   `password` (real credential verification), and proxy registration
+   moved to `POST /internal/proxy-register` guarded by `X-Internal-Key`
+   (upstream commit `baa71a9`, 2026-10-07). WinnerProxy now calls the
+   internal endpoint: it fetches the key from the core's
+   `POST /services/auth-key` with its client-credentials service token
+   (after the presence handshake, on demand, and again after any 401),
+   sends `{username, password, mojang_uuid}`, and consumes `profile_id`
+   from the envelope response. The endpoint's own error codes (409
+   `username_already_bound`, 400 `invalid_mojang_uuid`) match the
+   client's existing mapping. Contract citations: repo HA-Contract @
+   `21c7147d`,
+   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: /internal/proxy-register)`,
+   key parameter
+   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: InternalKeyHeader)`,
+   key issuance
+   `/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/microservices.md (field: /services/auth-key)`.
 3. **Unwired client methods — decoupling leftovers, not ordinary dead
    code.** `DeclareEmail` (`POST /user/declare-email`) and
    `EnableMojangBind` (`POST /user/mojang-bind-enable`) have no call
@@ -136,26 +126,17 @@ Verified drift items:
 
 ## Consequences
 
-- Today, hasJoined stages 1-2, profile query, root metadata, and the batch
-  query (fixed 2026-11-05, commit `4ded866`) work end-to-end against the
-  current upstream; proxy registration still fails as described.
-  HA-Contract's WinnerProxy contract documents the same state (see
-  [0005](./0005-contract-status.md)).
-- Fixing stage 3: the contract already names the intended path —
-  `POST /internal/proxy-register` with `X-Internal-Key` obtained from
-  `POST /services/auth-key` (see item 2 for citations). Implementing it
-  still requires decisions humans must make (key acquisition/refresh
-  lifecycle in WinnerProxy, response-shape adaptation, and whether the
-  declare-email/mojang-bind follow-up flow is revived at all) — **pending
-  author confirmation**; no code is changed in this knowledge pass.
-- Until stage 3 is fixed, operators should expect 503 for Mojang players at
-  join time; monitoring should not treat these as outages of the proxy
-  itself. Batch-query failures now surface as 502 with an explicit
+- All outbound calls now work end-to-end against the current upstream:
+  hasJoined stages 1-3, profile query, root metadata, the batch query
+  (fixed 2026-11-05, commit `4ded866`), and proxy registration (fixed
+  2026-11-05, commit `6c24770`). HA-Contract's WinnerProxy contract
+  documents the same state (see [0005](./0005-contract-status.md)).
+- Batch-query failures surface as 502 with an explicit
   `{"error": ...}` reason (`hrpauth batch endpoint missing` on upstream
   404, `hrpauth upstream unavailable` otherwise) instead of a bare 500.
 - Item 5 (compose `HRPAUTH_YGG_URL` with the relay prefix pointing at the
-  microservice container) is unchanged by the code fix: with that value the
-  batch call would still 404, now surfacing as the explicit 502
+  microservice container) is unchanged by the code fixes: with that value
+  the batch call would still 404, now surfacing as the explicit 502
   `hrpauth batch endpoint missing`. The compose template belongs to the
   Deployer repository; the deployment-side value still needs verification.
 
