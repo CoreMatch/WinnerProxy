@@ -4,10 +4,6 @@
 
 Accepted
 
-## Date
-
-2026-07-09
-
 ## Context
 
 Minecraft servers behind the HA stack verify joining players via Yggdrasil

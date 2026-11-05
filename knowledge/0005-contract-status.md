@@ -4,10 +4,6 @@
 
 Accepted
 
-## Date
-
-2026-11-04
-
 ## Context
 
 HA-Contract keeps per-service OpenAPI files under `docs/api/openapi/`.

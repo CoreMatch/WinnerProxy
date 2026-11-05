@@ -4,10 +4,6 @@
 
 Accepted
 
-## Date
-
-2026-07-09
-
 ## Context
 
 Game servers call `hasJoined` after a player joins. HA wants HA-authenticated
