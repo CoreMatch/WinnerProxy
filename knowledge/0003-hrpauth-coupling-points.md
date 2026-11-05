@@ -6,8 +6,7 @@ Accepted
 
 ## Date
 
-2026-10-22 (management/SDK integration, commit `53e6352b`; OAuth2
-client-credentials since `05ffc498`, 2026-08-23)
+2026-10-22
 
 ## Context
 
@@ -56,12 +55,6 @@ breaks if HRPAuth changes.
 - The `security_level: 0` declaration is load-bearing: it is what lets
   unauthenticated Minecraft traffic pass the relay. Raising it requires a
   coordinated change.
-- Item 6 is **not ordinary dead code**: the upstream endpoints once existed
-  in HRPAuth core and were removed by the 2026-10-06 decoupling commit
-  `9ab4e64`; the WinnerProxy side was added 2026-08-07 (`f63f62b9`) but
-  never wired into any handler. Whether the flow is revived (and via which
-  upstream path) is **pending author confirmation**; until then the methods
-  stay in place as the only remaining record of the intended flow.
 - Config fallback (item 2) means a half-configed deployment silently reuses
   proxy credentials for management; the startup log says so, but operators
   should configure the `hrpauth` section explicitly.
@@ -69,11 +62,8 @@ breaks if HRPAuth changes.
 ## Evidence
 
 - OAuth2 wiring: `internal/hrpauth/client.go::New` (token URL derivation
-  at `internal/hrpauth/client.go::tokenURL`); introduced by
-  `05ffc498e6de294865e1d5934a177a5b9317025a`
-  ("refactor(hrpauth): use OAuth2 client credentials", 2026-08-23).
-- Two clients + fallback: `main.go::hrpauthMgmtCli` (HEAD of `main`,
-  `86866128`).
+  at `internal/hrpauth/client.go::tokenURL`).
+- Two clients + fallback: `main.go::hrpauthMgmtCli`.
 - Presence request fields (security_level 0, root_metadata):
   `main.go::announcePresence`; type
   `internal/hrpauth/types.go::PresenceRequest`.
@@ -81,7 +71,5 @@ breaks if HRPAuth changes.
 - SDK package upload/delete:
   `internal/hrpauth/endpoints.go::UploadSDKPackage`,
   `internal/hrpauth/endpoints.go::DeleteSDKPackage`; startup hook
-  `main.go::uploadSDKPackage`; introduced by
-  `53e6352bbc3e69ca29d4a49109a9a3f47ee8d393` ("feat: add WinnerProxy SDK
-  and HRPAuth management", 2026-10-22).
+  `main.go::uploadSDKPackage`.
 - Default URLs: `config/config.go::Default`.
