@@ -4,10 +4,6 @@
 
 Accepted
 
-## Date
-
-2026-11-04
-
 ## Context
 
 WinnerProxy's HRPAuth client speaks to two planes: the Yggdrasil surface

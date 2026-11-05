@@ -4,10 +4,6 @@
 
 Accepted
 
-## Date
-
-2026-10-22
-
 ## Context
 
 WinnerProxy is intentionally stateless about identities — all account data

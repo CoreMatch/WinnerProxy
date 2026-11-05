@@ -22,7 +22,7 @@ self-hosting and maintenance.
 ## Rules
 
 - Entries are numbered `NNNN-<slug>.md`, written in English, and follow:
-  Status / Date / Context / Decision / Consequences / Evidence.
+  Status / Context / Decision / Consequences / Evidence.
 - Evidence must be checked against the repository before writing
   (`file::Symbol`, `file:line`, `(field: …)` anchors). Anything that
   could not be verified is marked `not verified`. Gaps are stated
@@ -32,10 +32,10 @@ self-hosting and maintenance.
 
 ## Entries
 
-| # | Title | Status | Date | One-line assertion |
-|---|-------|--------|------|--------------------|
-| [0001](./0001-service-scope-dispatcher.md) | Service scope: dispatcher, not proxy pool | Accepted | 2026-07-09 | WinnerProxy answers Yggdrasil join/profile queries by dispatching per account origin; only `hasJoined` ever fans out to Mojang — everything else is HRPAuth-only. |
-| [0002](./0002-three-stage-hasjoined.md) | Three-stage hasJoined flow | Accepted | 2026-07-09 | `hasJoined` tries HA first, then Mojang, then proxy-registers the Mojang player in HA; ambiguous/negative outcomes return 204, and `username_already_bound` rejects with 204. |
-| [0003](./0003-hrpauth-coupling-points.md) | Coupling points with HRPAuth core | Accepted | 2026-10-22 | WinnerProxy depends on HRPAuth OAuth2 client-credentials plus a fixed set of endpoints (Yggdrasil surface, `/internal/proxy-register`, `/services/*`); two clients (proxy vs management) with credential fallback. |
-| [0004](./0004-upstream-drift-and-dead-calls.md) | Outbound call status and open deployment question | Accepted | 2026-11-04 | All outbound calls succeed against the current upstream (batch failures surface as explicit 502 errors); the compose `HRPAUTH_YGG_URL` value is unverified against the live deployment. |
-| [0005](./0005-contract-status.md) | Contract status | Accepted | 2026-11-04 | WinnerProxy's external surface is documented by HA-Contract `docs/dev/WinnerProxy/README.md` plus `docs/api/openapi/winnerproxy-business.yaml`. |
+| # | Title | Status | One-line assertion |
+|---|-------|--------|--------------------|
+| [0001](./0001-service-scope-dispatcher.md) | Service scope: dispatcher, not proxy pool | Accepted | WinnerProxy answers Yggdrasil join/profile queries by dispatching per account origin; only `hasJoined` ever fans out to Mojang — everything else is HRPAuth-only. |
+| [0002](./0002-three-stage-hasjoined.md) | Three-stage hasJoined flow | Accepted | `hasJoined` tries HA first, then Mojang, then proxy-registers the Mojang player in HA; ambiguous/negative outcomes return 204, and `username_already_bound` rejects with 204. |
+| [0003](./0003-hrpauth-coupling-points.md) | Coupling points with HRPAuth core | Accepted | WinnerProxy depends on HRPAuth OAuth2 client-credentials plus a fixed set of endpoints (Yggdrasil surface, `/internal/proxy-register`, `/services/*`); two clients (proxy vs management) with credential fallback. |
+| [0004](./0004-upstream-drift-and-dead-calls.md) | Outbound call status and open deployment question | Accepted | All outbound calls succeed against the current upstream (batch failures surface as explicit 502 errors); the compose `HRPAUTH_YGG_URL` value is unverified against the live deployment. |
+| [0005](./0005-contract-status.md) | Contract status | Accepted | WinnerProxy's external surface is documented by HA-Contract `docs/dev/WinnerProxy/README.md` plus `docs/api/openapi/winnerproxy-business.yaml`. |
