@@ -49,8 +49,9 @@ func (h *Handler) Health(c *gin.Context) {
 // Three-stage flow:
 //  1. HA hasJoined — if HA returns 200, return HA's profile (HA skin).
 //  2. Mojang hasJoined — if Mojang returns 200, take the profile.
-//  3. Proxy-register — call HA POST /register with M.T. + Mojang UUID,
-//     return HA's profile_id as the player identity with Mojang skin.
+//  3. Proxy-register — call HA POST /internal/proxy-register with the
+//     service's X-Internal-Key and the Mojang UUID, return HA's
+//     profile_id as the player identity with Mojang skin.
 func (h *Handler) HasJoined(c *gin.Context) {
 	params := url.Values{}
 	for k, v := range c.Request.URL.Query() {

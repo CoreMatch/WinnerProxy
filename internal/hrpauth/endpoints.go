@@ -126,17 +126,37 @@ func (c *Client) BatchQuery(names []string) ([]*PlayerProfile, error) {
 	}
 }
 
-// RegisterByProxy performs an OAuth2-authenticated POST /register against HA.
+// internalKeyHeader carries the X-Internal-Key issued by the HRPAuth core
+// (POST /services/auth-key) on service-to-service calls.
+const internalKeyHeader = "X-Internal-Key"
+
+// RegisterByProxy registers a Mojang-authenticated player through the
+// internal service-to-service endpoint POST /internal/proxy-register,
+// authenticated with the service's X-Internal-Key. The key is fetched on
+// demand when missing and refreshed once after a 401 answer (the core
+// re-issues the key whenever a service requests it). The request is never
+// sent without a key: when none can be obtained the call fails with
+// ErrUpstream.
 func (c *Client) RegisterByProxy(username, mojangUUID, password string) (*RegisterResponse, error) {
 	body := RegisterRequest{
 		Username:   username,
 		Password:   password,
-		Email:      "", // HA auto-fills placeholder in OAuth2 path
 		MojangUUID: mojangUUID,
 	}
-	resp, err := c.doPost("/register", body)
+
+	resp, err := c.sendProxyRegister(body)
 	if err != nil {
 		return nil, ErrUpstream
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		_ = resp.Body.Close()
+		if ferr := c.FetchInternalKey(); ferr != nil {
+			return nil, ErrUpstream
+		}
+		resp, err = c.sendProxyRegister(body)
+		if err != nil {
+			return nil, ErrUpstream
+		}
 	}
 	defer resp.Body.Close()
 
@@ -163,6 +183,19 @@ func (c *Client) RegisterByProxy(username, mojangUUID, password string) (*Regist
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, ErrUpstream
 	}
+}
+
+// sendProxyRegister posts the registration body with the current internal
+// key, fetching the key first when it has not been obtained yet.
+func (c *Client) sendProxyRegister(body RegisterRequest) (*http.Response, error) {
+	key := c.internalKeyState()
+	if key == "" {
+		if err := c.FetchInternalKey(); err != nil {
+			return nil, err
+		}
+		key = c.internalKeyState()
+	}
+	return c.doPostHeaders("/internal/proxy-register", body, map[string]string{internalKeyHeader: key})
 }
 
 // RegisterPresence performs the microservice presence (bonjour)

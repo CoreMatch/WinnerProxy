@@ -35,8 +35,9 @@ func main() {
 		log.Printf("hrpauth upstream enabled (url=%s, timeout=%ds)",
 			cfg.Upstreams.Hrpauth.URL, cfg.Upstreams.Hrpauth.TimeoutSec)
 		if cfg.Upstreams.Hrpauth.ClientID == "" || cfg.Upstreams.Hrpauth.ClientSecret == "" {
-			log.Printf("WARN: hrpauth client_id or client_secret is empty; proxy-authenticated requests will fail. " +
-				"Edit config.yml manually.")
+			log.Fatalf("hrpauth upstream is enabled but upstreams.hrpauth.client_id/client_secret is empty: " +
+				"WinnerProxy cannot obtain a service token (needed for the X-Internal-Key used by proxy " +
+				"registration). Fill both values in config.yml, or set upstreams.hrpauth.enabled: false.")
 		}
 	} else {
 		log.Printf("hrpauth upstream disabled")
@@ -47,6 +48,8 @@ func main() {
 		cfg.Upstreams.Hrpauth.ClientSecret,
 		nil,
 	)
+	// The proxy-registration key is issued per presence-registry name.
+	hrpauthProxyCli.SetServiceName(cfg.Hrpauth.Presence.Name)
 
 	// Management client for Presence, SDK, and Relay registration.
 	// Uses cfg.Hrpauth which points to the root backend.
@@ -95,9 +98,10 @@ func main() {
 	}
 
 	// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
-	// Registers the service and its relay rules.
+	// Registers the service and its relay rules, then fetches the
+	// X-Internal-Key used by proxy registration.
 	if cfg.Hrpauth.Presence.Enabled {
-		announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL, cfg.Hrpauth.SDK.URL)
+		announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL)
 	}
 
 	services := []proxy.UpstreamService{
@@ -124,9 +128,10 @@ func main() {
 
 // announcePresence performs the presence (bonjour) handshake with
 // HRPAuth asynchronously. It registers WinnerProxy in HRPAuth's
-// presence registry and registers relay rules; a failure is only logged
-// as a warning and never blocks or stops the main process.
-func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, publicURL, sdkURL string) {
+// presence registry, registers relay rules, and fetches the
+// X-Internal-Key used by proxy registration; a failure is only logged
+// and never blocks or stops the main process.
+func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, publicURL string) {
 	go func() {
 		log.Printf("Presence: starting microservice registration (name=%s)", cfg.Name)
 
@@ -143,7 +148,6 @@ func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, 
 				Name:          "winnerproxy",
 				FrontendAreas: []string{"webui-dash"},
 			},
-			SDKURL: sdkURL,
 			RootMetadata: map[string]interface{}{
 				"yggdrasil": meta,
 			},
@@ -153,6 +157,15 @@ func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, 
 			return
 		}
 		log.Printf("Presence: microservice %q successfully registered (TTL=%ds)", cfg.Name, cfg.TTLSeconds)
+
+		// The internal key is issued per registered service; it authenticates
+		// POST /internal/proxy-register. Without it proxy registration cannot
+		// succeed, so surface the failure explicitly.
+		if err := proxyCli.FetchInternalKey(); err != nil {
+			log.Printf("ERROR: internal key fetch failed: %v — proxy registration will fail until a key is fetched", err)
+		} else {
+			log.Printf("Presence: internal key fetched for %q", cfg.Name)
+		}
 
 		if publicURL == "" {
 			log.Printf("Presence: skipping relay registration (public_url not configured)")
@@ -184,7 +197,6 @@ func buildRelayRules(base, prefix string) []hrpauth.RelayRule {
 		"/skin",
 		"/skins",
 		"/minecraftservices",
-		"/register",
 	}
 
 	relays := make([]hrpauth.RelayRule, 0, len(paths))

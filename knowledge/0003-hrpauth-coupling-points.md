@@ -32,29 +32,21 @@ breaks if HRPAuth changes.
    uuid, batch query, root metadata `GET /` (see
    [0004](./0004-upstream-drift-and-dead-calls.md) for which of these
    currently succeed).
-4. **Proxy registration**: `POST /register` (stage 3 of hasJoined).
+4. **Proxy registration**: `POST /internal/proxy-register` with the
+   service's `X-Internal-Key`, issued by the core's
+   `POST /services/auth-key` (stage 3 of hasJoined).
 5. **Management-plane calls** (root, non-blocking at startup):
    - `POST /services/presence` — name (default `WinnerProxy`), TTL,
      scope `{winnerproxy, [webui-dash]}`, `security_level: 0` (explicitly
-     level 0 so the Yggdrasil relay stays anonymous), `sdk_url`, and
+     level 0 so the Yggdrasil relay stays anonymous), and
      `root_metadata.yggdrasil` populated from the upstream's own
      `GET /` meta so HRPAuth can aggregate it.
    - `POST /services/relay` — rules mapping `/winnerproxy` + each Yggdrasil
      path (`/`, `/authserver`, `/sessionserver`, `/api/profiles/minecraft`,
      `/textures`, `/previews`, `/texture`, `/skin`, `/skins`,
-     `/minecraftservices`, `/register`) to this proxy's `public_url`.
+     `/minecraftservices`) to this proxy's `public_url`.
    - `POST /services/sdk-packages` (and DELETE) — compile-time SDK package
      upload for the WEBUI.
-6. **Unwired client methods with removed upstream endpoints**:
-   `DeclareEmail` (`POST /user/declare-email`) and `EnableMojangBind`
-   (`POST /user/mojang-bind-enable`) exist in the client but have never
-   had call sites. They are the remains of an unfinished post-registration
-   flow; see entry
-   [0004](./0004-upstream-drift-and-dead-calls.md) item 3 for the full
-   archaeology. **Update 2026-11-05: both methods (and the dead
-   `RegisterResponse.CBH` field) were deleted after the author confirmed
-   declare-email deprecated with no successor; player-side email setting is
-   the claim flow (`/ha reg` → `/admin/claim-user` on HRPAuth-Yggdrasil-API).**
 
 ## Consequences
 
@@ -82,7 +74,7 @@ breaks if HRPAuth changes.
   ("refactor(hrpauth): use OAuth2 client credentials", 2026-08-23).
 - Two clients + fallback: `main.go::hrpauthMgmtCli` (HEAD of `main`,
   `86866128`).
-- Presence request fields (security_level 0, sdk_url, root_metadata):
+- Presence request fields (security_level 0, root_metadata):
   `main.go::announcePresence`; type
   `internal/hrpauth/types.go::PresenceRequest`.
 - Relay path list: `main.go::buildRelayRules`.
@@ -92,18 +84,4 @@ breaks if HRPAuth changes.
   `main.go::uploadSDKPackage`; introduced by
   `53e6352bbc3e69ca29d4a49109a9a3f47ee8d393` ("feat: add WinnerProxy SDK
   and HRPAuth management", 2026-10-22).
-- Unwired methods: `internal/hrpauth/endpoints.go:L189-L221 @ 86866128`
-  (methods deleted 2026-11-05); `git log
-  --all -S".DeclareEmail("` returns no commit — a call site has never
-  existed (verified 2026-11-04). Added by commit
-  `f63f62b9a868f25b3a3cd0a7468b81b197090d62` ("feat(hrpauth): add email and
-  mojang bind support", 2026-08-07), which per its commit message added
-  "supporting type definitions" and the client methods only.
-- Upstream-side archaeology (repo HRPAuth @ `8dd67593`): routes
-  `POST /user/declare-email` and `POST /user/mojang-bind-enable` existed
-  (added `5ba9776`/`8ca74f3` 2026-07-29 and `12f22bc` 2026-07-09) and were
-  removed by `9ab4e64` ("refactor: strip legacy Yggdrasil stack and unused
-  cleanup services", 2026-10-06 21:15 +0800). Contract scope
-  `user.declare-email` for service-to-service calls: repo HA-Contract
-  [xref] (@ `21c7147d`), `docs/dev/HRPAuth/tokens.md:L43`.
 - Default URLs: `config/config.go::Default`.

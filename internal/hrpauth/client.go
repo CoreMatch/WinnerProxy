@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -51,15 +53,20 @@ var (
 )
 
 // Client is a thin HTTP client for HRPAuth. One instance per WinnerProxy
-// process; safe for concurrent use because *http.Client is.
+// process; safe for concurrent use.
 type Client struct {
 	baseURL string
+	rootURL string
 	http    HTTPDoer
+
+	mu          sync.Mutex
+	serviceName string // presence-registry name, used when fetching the internal key
+	internalKey string // X-Internal-Key value, empty until fetched
 }
 
 // New constructs a Client. It initializes an OAuth2 client_credentials
 // flow using the provided clientID and clientSecret. The returned client
-// automatically attaches a Bearer token to every request.
+// automatically attaches a Bearer service token to every request.
 func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 	ctx := context.Background()
 	if doer != nil {
@@ -73,12 +80,15 @@ func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 	clientID = strings.TrimSpace(clientID)
 	clientSecret = strings.TrimSpace(clientSecret)
 
-	// Standard HRPAuth OAuth token endpoint is /oauth/token.
-	// We always use the root of the provided baseURL for the token endpoint
-	// to ensure it works even if a subpath (like /yggdrasil-api/) is provided.
+	// Standard HRPAuth OAuth token endpoint is /oauth/token; the internal
+	// key lives on the core's /services/auth-key. Both sit on the host root
+	// of the configured base URL, even when the base carries the
+	// /yggdrasil-api relay prefix.
 	tokenURL := "/oauth/token"
+	rootURL := strings.TrimRight(baseURL, "/")
 	if u, err := url.Parse(baseURL); err == nil {
 		tokenURL = fmt.Sprintf("%s://%s/oauth/token", u.Scheme, u.Host)
+		rootURL = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	}
 
 	conf := &clientcredentials.Config{
@@ -89,8 +99,75 @@ func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
+		rootURL: rootURL,
 		http:    conf.Client(ctx),
 	}
+}
+
+// SetServiceName records this service's presence-registry name, used when
+// fetching the X-Internal-Key for proxy registration.
+func (c *Client) SetServiceName(name string) {
+	c.mu.Lock()
+	c.serviceName = name
+	c.mu.Unlock()
+}
+
+// FetchInternalKey obtains (or refreshes) this service's X-Internal-Key from
+// the HRPAuth core endpoint POST /services/auth-key, authenticated by the
+// client's service token. The key is stored and attached to proxy-registration
+// requests. The core re-issues the key on every call, so this is also the
+// recovery path after a 401.
+func (c *Client) FetchInternalKey() error {
+	c.mu.Lock()
+	name := c.serviceName
+	c.mu.Unlock()
+	if name == "" {
+		return errors.New("hrpauth: service name not configured (SetServiceName)")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(map[string]string{"name": name}); err != nil {
+		return err
+	}
+	u, err := url.JoinPath(c.rootURL, "/services/auth-key")
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, u, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("hrpauth: fetch internal key: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return fmt.Errorf("hrpauth: fetch internal key: upstream status %d", resp.StatusCode)
+	}
+	var result struct {
+		InternalKey string `json:"internal_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("hrpauth: fetch internal key: %w", err)
+	}
+	if result.InternalKey == "" {
+		return errors.New("hrpauth: fetch internal key: empty key in response")
+	}
+
+	c.mu.Lock()
+	c.internalKey = result.InternalKey
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *Client) internalKeyState() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.internalKey
 }
 
 // doGet issues a GET against path?query. The caller decides what each
@@ -114,6 +191,12 @@ func (c *Client) doGet(path, query string) (*http.Response, error) {
 // doPost issues a POST with a JSON-encoded body. The caller decides
 // what each status code means.
 func (c *Client) doPost(path string, body interface{}) (*http.Response, error) {
+	return c.doPostHeaders(path, body, nil)
+}
+
+// doPostHeaders issues a POST with a JSON-encoded body plus extra request
+// headers. Used for the internal-key-authenticated proxy registration.
+func (c *Client) doPostHeaders(path string, body interface{}, headers map[string]string) (*http.Response, error) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		return nil, err
@@ -128,5 +211,8 @@ func (c *Client) doPost(path string, body interface{}) (*http.Response, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	return c.http.Do(req)
 }

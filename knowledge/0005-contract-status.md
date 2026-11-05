@@ -48,9 +48,9 @@ which HA-Contract documents for the whole ecosystem.
 
 - The inbound surface now has a machine-checkable OpenAPI file that the
   HA-Contract drift script compares against the registered routes.
-- The outbound-call state (proxy registration still broken, see 0004) is
-  documented in the dev contract's outbound table, not in the OpenAPI
-  file, which only describes WinnerProxy's own inbound surface.
+- The outbound-call state is documented in the dev contract's outbound
+  table, not in the OpenAPI file, which only describes WinnerProxy's own
+  inbound surface.
 
 ## Evidence
 
