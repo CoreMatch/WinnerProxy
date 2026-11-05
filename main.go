@@ -42,14 +42,6 @@ func main() {
 	} else {
 		log.Printf("hrpauth upstream disabled")
 	}
-	hrpauthProxyCli := hrpauth.New(
-		cfg.Upstreams.Hrpauth.URL,
-		cfg.Upstreams.Hrpauth.ClientID,
-		cfg.Upstreams.Hrpauth.ClientSecret,
-		nil,
-	)
-	// The proxy-registration key is issued per presence-registry name.
-	hrpauthProxyCli.SetServiceName(cfg.Hrpauth.Presence.Name)
 
 	// Management client for Presence, SDK, and Relay registration.
 	// Uses cfg.Hrpauth which points to the root backend.
@@ -82,6 +74,50 @@ func main() {
 	if mgmtClientID == "" {
 		log.Printf("WARN: No HRPAuth credentials found in config. Management tasks will fail.")
 	}
+
+	// Startup credential resolution: when the configured credentials are
+	// HRPAuth's built-in super client, they are exchanged for
+	// WinnerProxy's own low-privilege client via POST /oauth/register
+	// (RFC 7591 protected registration) and the super secret is discarded
+	// from memory. Credentials that are already a per-service client are
+	// reused unchanged (idempotent path — no exchange, no write-back).
+	// Any failure aborts startup: super credentials must never reach
+	// business requests, and there is no fallback to running with
+	// unverified credentials.
+	if mgmtClientID != "" && mgmtClientSecret != "" {
+		superID, superSecret := mgmtClientID, mgmtClientSecret
+
+		// The register endpoint only accepts presence-registered service
+		// names, so the bonjour handshake goes first. It is a plain
+		// request: no token may be attached before the credentials are
+		// resolved (the super secret is used for the exchange call only).
+		if cfg.Hrpauth.Presence.Enabled {
+			if err := hrpauth.RegisterPresencePlain(mgmtURL, buildPresenceRequest(cfg.Hrpauth.Presence, nil), nil); err != nil {
+				log.Printf("Presence: bootstrap registration failed: %v (a super-credential exchange will be rejected until presence succeeds)", err)
+			}
+		}
+
+		res, err := hrpauth.ResolveServiceCredentials(mgmtURL, cfg.Hrpauth.Presence.Name, mgmtClientID, mgmtClientSecret, nil)
+		if err != nil {
+			log.Fatalf("credential resolution failed (refusing to start with unverified or super credentials): %v", err)
+		}
+		if res.Exchanged {
+			log.Printf("credentials: super client detected and exchanged for per-service client %q; super credentials discarded from memory", res.ClientID)
+			applyResolvedCredentials(cfg, cfgPath, superID, superSecret, res)
+			mgmtClientID, mgmtClientSecret = res.ClientID, res.ClientSecret
+		} else {
+			log.Printf("credentials: configured client %q confirmed as per-service client (no exchange needed)", mgmtClientID)
+		}
+	}
+
+	hrpauthProxyCli := hrpauth.New(
+		cfg.Upstreams.Hrpauth.URL,
+		cfg.Upstreams.Hrpauth.ClientID,
+		cfg.Upstreams.Hrpauth.ClientSecret,
+		nil,
+	)
+	// The proxy-registration key is issued per presence-registry name.
+	hrpauthProxyCli.SetServiceName(cfg.Hrpauth.Presence.Name)
 
 	hrpauthMgmtCli := hrpauth.New(
 		mgmtURL,
@@ -137,22 +173,13 @@ func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, 
 
 		// Fetch server meta from upstream HRPAuth to include in RootMetadata.
 		// This allows HRPAuth to aggregate WinnerProxy's Yggdrasil info.
-		// We do this inside the goroutine to avoid blocking startup.
+		// We do this inside the goroutine to avoid blocking startup. The
+		// call re-upserts the presence record that the synchronous
+		// bootstrap handshake already created (with root_metadata this
+		// time).
 		meta, _ := proxyCli.GetServerMeta()
 
-		req := hrpauth.PresenceRequest{
-			Name:          cfg.Name,
-			TTLSeconds:    cfg.TTLSeconds,
-			SecurityLevel: 0, // Level 0 to allow anonymous relay for Yggdrasil
-			Scope: &hrpauth.PresenceScope{
-				Name:          "winnerproxy",
-				FrontendAreas: []string{"webui-dash"},
-			},
-			RootMetadata: map[string]interface{}{
-				"yggdrasil": meta,
-			},
-		}
-		if err := cli.RegisterPresence(req); err != nil {
+		if err := cli.RegisterPresence(buildPresenceRequest(cfg, meta)); err != nil {
 			log.Printf("Presence: registration failed: %v", err)
 			return
 		}
@@ -229,4 +256,63 @@ func configPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(filepath.Dir(exe), configFileName), nil
+}
+
+// buildPresenceRequest assembles the presence (bonjour) body. meta may be
+// nil during the synchronous bootstrap handshake (root_metadata is added
+// by the asynchronous follow-up once the upstream meta is known).
+func buildPresenceRequest(cfg config.PresenceConfig, meta map[string]interface{}) hrpauth.PresenceRequest {
+	req := hrpauth.PresenceRequest{
+		Name:          cfg.Name,
+		TTLSeconds:    cfg.TTLSeconds,
+		SecurityLevel: 0, // Level 0 to allow anonymous relay for Yggdrasil
+		Scope: &hrpauth.PresenceScope{
+			Name:          "winnerproxy",
+			FrontendAreas: []string{"webui-dash"},
+		},
+	}
+	if meta != nil {
+		req.RootMetadata = map[string]interface{}{
+			"yggdrasil": meta,
+		}
+	}
+	return req
+}
+
+// applyResolvedCredentials completes a successful super-credential
+// exchange: every in-memory config field that carried the super pair is
+// overwritten with the exchanged low-privilege pair (so no client is ever
+// constructed with the super secret and no live reference to it remains),
+// then the config-file write-back is attempted.
+//
+// Write-back outcomes:
+//   - entrypoint-rendered deployment (CONFIG_TEMPLATE/RENDERED_CONFIG):
+//     the file would be re-rendered on the next container start, so
+//     nothing is written and the operator is pointed at the
+//     template/environment side;
+//   - write failure: not fatal — the service keeps running with the
+//     in-memory credentials, but the next startup will exchange again;
+//   - success: the file holds the low-privilege pair (atomic rename,
+//     .bak of the previous content, permissions tightened to 0600), so
+//     the next startup takes the idempotent path directly.
+func applyResolvedCredentials(cfg *config.Config, cfgPath, superID, superSecret string, res *hrpauth.Resolution) {
+	if cfg.Hrpauth.ClientID == superID && cfg.Hrpauth.ClientSecret == superSecret {
+		cfg.Hrpauth.ClientID = res.ClientID
+		cfg.Hrpauth.ClientSecret = res.ClientSecret
+	}
+	if cfg.Upstreams.Hrpauth.ClientID == superID && cfg.Upstreams.Hrpauth.ClientSecret == superSecret {
+		cfg.Upstreams.Hrpauth.ClientID = res.ClientID
+		cfg.Upstreams.Hrpauth.ClientSecret = res.ClientSecret
+	}
+
+	if config.IsRenderedDeployment() {
+		log.Printf("WARN: config file is entrypoint-rendered (CONFIG_TEMPLATE/RENDERED_CONFIG); per-service credentials were NOT written back — set WINNERPROXY_CLIENT_ID/WINNERPROXY_CLIENT_SECRET on the template/environment side instead; this deployment will exchange again on every start")
+		return
+	}
+	n, err := config.RewriteClientCredentials(cfgPath, superID, superSecret, res.ClientID, res.ClientSecret)
+	if err != nil {
+		log.Printf("ERROR: config file could not be rewritten with the per-service credentials (the service keeps running with the in-memory credentials): %v — next startup will perform the exchange again", err)
+		return
+	}
+	log.Printf("credentials: config file rewritten with per-service client %q (sections replaced=%d, previous content kept at %s.bak)", res.ClientID, n, cfgPath)
 }
