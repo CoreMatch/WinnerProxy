@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -321,45 +322,195 @@ func TestRegisterPresence_NetworkError(t *testing.T) {
 	}
 }
 
+// --- FetchInternalKey ---
+
+func TestFetchInternalKey_200(t *testing.T) {
+	var gotBody map[string]string
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/services/auth-key", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("expected service Bearer token, got %q", r.Header.Get("Authorization"))
+		}
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"success":true,"message":"Internal key generated/updated","data":{"internal_key":"key-1"},"internal_key":"key-1"}`)
+	})
+
+	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
+	if err := c.FetchInternalKey(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotBody["name"] != "WinnerProxy" {
+		t.Errorf("expected name=WinnerProxy, got %q", gotBody["name"])
+	}
+	if key := c.internalKeyState(); key != "key-1" {
+		t.Errorf("stored key = %q, want key-1", key)
+	}
+}
+
+func TestFetchInternalKey_Non200(t *testing.T) {
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/services/auth-key", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"success":false,"code":"invalid_request","error":"invalid_request","message":"service not found"}`)
+	})
+
+	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
+	if err := c.FetchInternalKey(); err == nil {
+		t.Fatal("expected error for non-200 auth-key response")
+	}
+	if key := c.internalKeyState(); key != "" {
+		t.Fatalf("key must stay empty after a failed fetch, got %q", key)
+	}
+}
+
+func TestFetchInternalKey_NoServiceName(t *testing.T) {
+	_, srv := newTestServer(t)
+	c := newTestClient(t, srv.URL)
+	if err := c.FetchInternalKey(); err == nil {
+		t.Fatal("expected error when the service name is not configured")
+	}
+}
+
 // --- RegisterByProxy ---
 
-func TestRegisterByProxy_200(t *testing.T) {
-	var gotBody RegisterRequest
+// registerTestServer wires the fake upstream for proxy registration:
+// /oauth/token (via newTestServer), /services/auth-key issuing keys from
+// the provided sequence, and /internal/proxy-register answering through
+// the register handler while recording every received key.
+func registerTestServer(t *testing.T, keys []string, register func(w http.ResponseWriter, r *http.Request, key string)) (*httptest.Server, *func() []string) {
+	t.Helper()
+	var mu = &struct {
+		sync.Mutex
+		issued   int
+		received []string
+	}{}
 	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/services/auth-key", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		idx := mu.issued
+		mu.issued++
+		mu.Unlock()
+		key := keys[len(keys)-1]
+		if idx < len(keys) {
+			key = keys[idx]
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"success":true,"internal_key":"`+key+`"}`)
+	})
+	mux.HandleFunc("/internal/proxy-register", func(w http.ResponseWriter, r *http.Request) {
+		key := r.Header.Get("X-Internal-Key")
+		mu.Lock()
+		mu.received = append(mu.received, key)
+		mu.Unlock()
+		register(w, r, key)
+	})
+	keysSeen := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		out := make([]string, len(mu.received))
+		copy(out, mu.received)
+		return out
+	}
+	return srv, &keysSeen
+}
+
+func TestRegisterByProxy_FetchesKeyAndSendsHeader(t *testing.T) {
+	var gotBody RegisterRequest
+	srv, keysSeen := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, key string) {
+		if key != "key-1" {
+			t.Errorf("X-Internal-Key = %q, want key-1", key)
+		}
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		_ = json.NewEncoder(w).Encode(RegisterResponse{
 			Success:   true,
-			UID:       42,
-			Message:   "Register successful",
+			Message:   "Proxy account registered",
 			ProfileID: "f7c77d999f154a66a87dc4a51ef30d19",
 		})
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	got, err := c.RegisterByProxy("alice", "f7c77d999f154a66a87dc4a51ef30d19", "pw123456")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.ProfileID != "f7c77d999f154a66a87dc4a51ef30d19" || got.UID != 42 {
+	if got.ProfileID != "f7c77d999f154a66a87dc4a51ef30d19" {
 		t.Errorf("unexpected response: %+v", got)
 	}
 	if gotBody.Username != "alice" || gotBody.MojangUUID != "f7c77d999f154a66a87dc4a51ef30d19" {
 		t.Errorf("body fields wrong: %+v", gotBody)
 	}
-	if gotBody.Email != "" {
-		t.Errorf("email should be empty (HA fills placeholder), got %q", gotBody.Email)
+	if len((*keysSeen)()) != 1 {
+		t.Fatalf("register calls = %d, want 1", len((*keysSeen)()))
+	}
+}
+
+// TestRegisterByProxy_401RefetchRetry covers key rotation: the first
+// attempt is rejected with 401, the client re-fetches the key and the
+// retry succeeds.
+func TestRegisterByProxy_401RefetchRetry(t *testing.T) {
+	var attempts int
+	srv, keysSeen := registerTestServer(t, []string{"stale-key", "fresh-key"}, func(w http.ResponseWriter, r *http.Request, key string) {
+		attempts++
+		if key != "fresh-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"success":false,"code":"invalid_credentials","error":"invalid_credentials","message":"invalid internal key"}`)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(RegisterResponse{Success: true, ProfileID: "pid-2"})
+	})
+
+	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
+	got, err := c.RegisterByProxy("alice", "uuid", "pw")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ProfileID != "pid-2" {
+		t.Errorf("unexpected response: %+v", got)
+	}
+	if attempts != 2 {
+		t.Fatalf("register attempts = %d, want 2 (401 then retry)", attempts)
+	}
+	seen := (*keysSeen)()
+	if len(seen) != 2 || seen[0] != "stale-key" || seen[1] != "fresh-key" {
+		t.Fatalf("keys seen by upstream = %v, want [stale-key fresh-key]", seen)
+	}
+}
+
+// TestRegisterByProxy_KeyUnavailableSendsNothing: when no internal key can
+// be fetched, the registration must fail without sending a keyless request.
+func TestRegisterByProxy_KeyUnavailableSendsNothing(t *testing.T) {
+	var registerHits int
+	mux, srv := newTestServer(t)
+	mux.HandleFunc("/services/auth-key", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/internal/proxy-register", func(w http.ResponseWriter, r *http.Request) {
+		registerHits++
+	})
+
+	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
+	if _, err := c.RegisterByProxy("alice", "uuid", "pw"); err != ErrUpstream {
+		t.Fatalf("expected ErrUpstream, got %v", err)
+	}
+	if registerHits != 0 {
+		t.Fatalf("register endpoint hit %d times, want 0 (no keyless request)", registerHits)
 	}
 }
 
 func TestRegisterByProxy_409_UsernameBound(t *testing.T) {
-	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, _ string) {
 		w.WriteHeader(409)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "username_already_bound"})
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
 	if err != ErrUsernameBound {
 		t.Fatalf("expected ErrUsernameBound, got %v", err)
@@ -367,13 +518,13 @@ func TestRegisterByProxy_409_UsernameBound(t *testing.T) {
 }
 
 func TestRegisterByProxy_400_InvalidMojangUUID(t *testing.T) {
-	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, _ string) {
 		w.WriteHeader(400)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid_mojang_uuid"})
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	_, err := c.RegisterByProxy("alice", "not-hex", "pw")
 	if err != ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
@@ -381,12 +532,12 @@ func TestRegisterByProxy_400_InvalidMojangUUID(t *testing.T) {
 }
 
 func TestRegisterByProxy_500(t *testing.T) {
-	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, _ string) {
 		w.WriteHeader(500)
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
 	if err != ErrUpstream {
 		t.Fatalf("expected ErrUpstream, got %v", err)
@@ -395,13 +546,13 @@ func TestRegisterByProxy_500(t *testing.T) {
 
 func TestRegisterByProxy_409_OtherError(t *testing.T) {
 	// 409 with unknown error code → ErrUpstream (defensive)
-	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, _ string) {
 		w.WriteHeader(409)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "weird_state"})
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
 	if err != ErrUpstream {
 		t.Fatalf("expected ErrUpstream, got %v", err)
@@ -410,13 +561,13 @@ func TestRegisterByProxy_409_OtherError(t *testing.T) {
 
 func TestRegisterByProxy_400_OtherError(t *testing.T) {
 	// 400 with unknown error code → ErrUpstream
-	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, _ string) {
 		w.WriteHeader(400)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "weird_state"})
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	_, err := c.RegisterByProxy("alice", "uuid", "pw")
 	if err != ErrUpstream {
 		t.Fatalf("expected ErrUpstream, got %v", err)
@@ -425,13 +576,13 @@ func TestRegisterByProxy_400_OtherError(t *testing.T) {
 
 func TestRegisterByProxy_ContentType(t *testing.T) {
 	var gotCT string
-	mux, srv := newTestServer(t)
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := registerTestServer(t, []string{"key-1"}, func(w http.ResponseWriter, r *http.Request, _ string) {
 		gotCT = r.Header.Get("Content-Type")
 		_ = json.NewEncoder(w).Encode(RegisterResponse{Success: true})
 	})
 
 	c := newTestClient(t, srv.URL)
+	c.SetServiceName("WinnerProxy")
 	_, _ = c.RegisterByProxy("alice", "uuid", "pw")
 	if !strings.HasPrefix(gotCT, "application/json") {
 		t.Errorf("expected Content-Type: application/json, got %q", gotCT)

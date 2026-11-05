@@ -77,6 +77,10 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"test-token","token_type":"Bearer","expires_in":3600}`))
 	})
+	mux.HandleFunc("/services/auth-key", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"internal_key":"test-internal-key"}`))
+	})
 	mux.HandleFunc("/sessionserver/session/minecraft/hasJoined", func(w http.ResponseWriter, r *http.Request) {
 		ha.hasJoinCalls.Add(1)
 		if ha.hasJoin != nil {
@@ -105,7 +109,7 @@ func newFakeHA(t *testing.T) (*fakeHA, *httptest.Server) {
 		}
 		w.WriteHeader(http.StatusInternalServerError)
 	})
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/internal/proxy-register", func(w http.ResponseWriter, r *http.Request) {
 		ha.registerCalls.Add(1)
 		if ha.register != nil {
 			ha.register(w, r)
@@ -137,6 +141,10 @@ func buildRouter(t *testing.T, srv *httptest.Server, mojang proxy.UpstreamServic
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cli := hrpauth.New(srv.URL, "client-id", "client-secret", nil)
+	cli.SetServiceName("WinnerProxy")
+	if err := cli.FetchInternalKey(); err != nil {
+		t.Fatalf("fetch internal key: %v", err)
+	}
 	var services []proxy.UpstreamService
 	if mojang != nil {
 		services = append(services, mojang)

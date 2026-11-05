@@ -1,9 +1,11 @@
 // Package hrpauth is a thin HTTP client for the HRPAuth (HA) backend.
 //
 // It speaks Yggdrasil on the front (hasJoined, profile, batch query) and
-// exposes a single M.T.-authenticated /register helper for proxy-side
-// registration. All identity data lives in HRPAuth; this client is
-// stateless and only translates requests.
+// exposes the service-to-service proxy-registration call
+// (POST /internal/proxy-register, authenticated with the X-Internal-Key
+// issued by the HRPAuth core). All identity data lives in HRPAuth; this
+// client is stateless apart from the cached internal key and only
+// translates requests.
 package hrpauth
 
 // PlayerProfile mirrors the Yggdrasil session/profile response shape.
@@ -20,18 +22,18 @@ type PlayerProperty struct {
 	Signature string `json:"signature,omitempty"`
 }
 
-// RegisterRequest is the body of POST /register.
+// RegisterRequest is the body of POST /internal/proxy-register.
 type RegisterRequest struct {
 	Username   string `json:"username"`
 	Password   string `json:"password"`
-	Email      string `json:"email"`
 	MojangUUID string `json:"mojang_uuid,omitempty"`
 }
 
-// RegisterResponse is what HA returns on a successful POST /register.
+// RegisterResponse is what HA returns on a successful proxy registration:
+// the unified envelope carries account_id and profile_id (flattened to the
+// top level as well); only profile_id is consumed by WinnerProxy.
 type RegisterResponse struct {
 	Success   bool   `json:"success"`
-	UID       int64  `json:"uid"`
 	Message   string `json:"message"`
 	ProfileID string `json:"profile_id"`
 }
@@ -48,7 +50,6 @@ type PresenceRequest struct {
 	Name          string                 `json:"name"`
 	TTLSeconds    int                    `json:"ttl_seconds,omitempty"`
 	Scope         *PresenceScope         `json:"scope,omitempty"`
-	SDKURL        string                 `json:"sdk_url,omitempty"`
 	SecurityLevel int                    `json:"security_level"`
 	RootMetadata  map[string]interface{} `json:"root_metadata,omitempty"`
 }
