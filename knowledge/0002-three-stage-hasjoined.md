@@ -6,7 +6,7 @@ Accepted
 
 ## Date
 
-2026-07-09 (commit `41f5ff14`; empty-200 handling fix `ec9311b5`, same day)
+2026-07-09
 
 ## Context
 
@@ -32,10 +32,11 @@ verbatim to HA, so future HA-side parameters need no WinnerProxy change):
    (only when `upstreams.official.enabled`). Positive results are cached
    username-keyed so repeated join attempts within the TTL avoid a Mojang
    roundtrip. Cache hit or fresh hit proceeds to stage 3.
-3. **Stage 3 — proxy-register**: `POST {hrpauth}/register` with the Mojang
-   name/UUID and a random 16-byte password (base64url; never used by the
-   player). On success the response is the **HA profile_id** combined with
-   the **Mojang skin properties**.
+3. **Stage 3 — proxy-register**: `POST {hrpauth}/internal/proxy-register`
+   with the service's `X-Internal-Key`, the Mojang name/UUID and a random
+   16-byte password (base64url; never used by the player). On success the
+   response is the **HA profile_id** combined with the **Mojang skin
+   properties**.
    - HA 409 `username_already_bound` → reject the player with **204** (the
      name belongs to a non-bindable HA account).
    - Other failures → 503 "auth backend unavailable".
@@ -50,12 +51,6 @@ implementation).
 - Benefit: HA players get HA skins; Mojang players keep official skins and
   are gradually absorbed into HA; game servers see one uniform Yggdrasil
   answer.
-- Cost: stage 3 depends on the upstream `/register` contract, which is
-  currently drifted — see
-  [0004](./0004-upstream-drift-and-dead-calls.md). While drifted, Mojang
-  players fail at stage 3 (503) even though stage 2 succeeded. The
-  contract-sanctioned replacement path (`POST /internal/proxy-register`
-  with `X-Internal-Key`) is documented in entry 0004 item 2.
 - Cost: 204 is overloaded (no session / rejected bind); game servers treat
   both as "verification failed" by Yggdrasil convention — intentional.
 - Constraint: the flow returns Mojang properties with an HA profile id —
@@ -64,14 +59,10 @@ implementation).
 
 ## Evidence
 
-- Flow implementation: `internal/handler/handler.go::HasJoined` (HEAD of
-  `main`, `86866128`); stage comments at
-  `internal/handler/handler.go:L49-L53`.
+- Flow implementation: `internal/handler/handler.go::HasJoined`; stage
+  comments at `internal/handler/handler.go:L49-L53`.
 - HA empty-200 → ErrNoProfile: `internal/hrpauth/endpoints.go::HasJoined`
-  (comment `internal/hrpauth/endpoints.go:L39-L42`, check
-  `internal/hrpauth/endpoints.go:L43-L45`); fix commit
-  `ec9311b5b7123d3a35d93592bd6eceaed68a12e5` ("fix: correct HRPAuth
-  endpoint paths and handle empty 200 HA responses", 2026-07-09).
+  (empty-profile check in the 200 branch).
 - Mojang leg: `internal/proxy/mojang.go::HasJoined` (204/404 →
   ErrNoProfile).
 - Mojang username cache: `internal/handler/handler.go::GetMojangProfile`,
@@ -87,5 +78,3 @@ implementation).
   `config/config.go::Default`; noop/freecache implementations
   `internal/cache/noop.go::NewNoop`,
   `internal/cache/freecache.go::NewFreeCache`.
-- Flow introduction: commit `41f5ff14048b0b04ad236889fd6a9bab4d59c85f`
-  (2026-07-09).

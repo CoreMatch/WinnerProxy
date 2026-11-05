@@ -6,8 +6,7 @@ Accepted
 
 ## Date
 
-2026-07-09 (three-stage HA-first rewrite, commit `41f5ff14`; rebranded to
-WinnerProxy in `a729f4e6`, 2026-10-22)
+2026-07-09
 
 ## Context
 
@@ -59,8 +58,7 @@ account origin** — explicitly *not* a generic multi-upstream proxy pool:
 
 ## Evidence
 
-- Route binding (dual prefix): `internal/router/router.go::bindYggdrasil`
-  (HEAD of `main`, `86866128`).
+- Route binding (dual prefix): `internal/router/router.go::bindYggdrasil`.
 - Handler dispatch comments and per-route upstream choice:
   `internal/handler/handler.go::Handler` (overview),
   `internal/handler/handler.go::QueryProfile` (QueryProfile → HRPAuth),
@@ -72,13 +70,8 @@ account origin** — explicitly *not* a generic multi-upstream proxy pool:
   (`findMojang`).
 - Unused Mojang methods: `internal/proxy/mojang.go::QueryProfile`,
   `internal/proxy/mojang.go::BatchQuery`
-  (QueryProfile/BatchQuery implemented, no handler call site — verified by
-  searching call sites, 2026-11-04).
+  (QueryProfile/BatchQuery implemented, no handler call site).
 - Interface symmetry note: `internal/proxy/upstream.go::UpstreamService`.
 - Mojang toggle: `main.go:L106-L114`; default upstream config
   `config/config.go::Default` (`official` = `https://api.minecraftservices.com`,
   [xref] `hrpauth` = `http://127.0.0.1:2778/yggdrasil-api/`).
-- Commits: `41f5ff14048b0b04ad236889fd6a9bab4d59c85f` ("feat: replace
-  HasJoined with three-stage HA-first flow", 2026-07-09);
-  `a729f4e6f3fcff45591481da6d4e7fad999161fc` ("feat: rebrand to winnerproxy
-  and add custom sdk url config", 2026-10-22).

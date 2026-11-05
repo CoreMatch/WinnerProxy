@@ -24,8 +24,9 @@ self-hosting and maintenance.
 - Entries are numbered `NNNN-<slug>.md`, written in English, and follow:
   Status / Date / Context / Decision / Consequences / Evidence.
 - Evidence must be checked against the repository before writing
-  (`file:line`, commit hash). Anything that could not be verified is
-  marked `not verified`. Gaps are stated honestly, never papered over.
+  (`file::Symbol`, `file:line`, `(field: …)` anchors). Anything that
+  could not be verified is marked `not verified`. Gaps are stated
+  honestly, never papered over.
 - New entries get the next free number; superseded entries change Status
   to `Superseded by NNNN` instead of being deleted.
 
@@ -35,6 +36,6 @@ self-hosting and maintenance.
 |---|-------|--------|------|--------------------|
 | [0001](./0001-service-scope-dispatcher.md) | Service scope: dispatcher, not proxy pool | Accepted | 2026-07-09 | WinnerProxy answers Yggdrasil join/profile queries by dispatching per account origin; only `hasJoined` ever fans out to Mojang — everything else is HRPAuth-only. |
 | [0002](./0002-three-stage-hasjoined.md) | Three-stage hasJoined flow | Accepted | 2026-07-09 | `hasJoined` tries HA first, then Mojang, then proxy-registers the Mojang player in HA; ambiguous/negative outcomes return 204, and `username_already_bound` rejects with 204. |
-| [0003](./0003-hrpauth-coupling-points.md) | Coupling points with HRPAuth core | Accepted | 2026-10-22 | WinnerProxy depends on HRPAuth OAuth2 client-credentials plus a fixed set of endpoints (Yggdrasil surface, `/register`, `/services/*`); two clients (proxy vs management) with credential fallback. |
-| [0004](./0004-upstream-drift-and-dead-calls.md) | Upstream drift and dead outbound calls | Accepted | 2026-11-04 | Batch query double-prefix bug fixed 2026-11-05 (`4ded866`, now 502 with explicit errors); proxy registration (`/register` body mismatch; the real endpoint is `/internal/proxy-register` with X-Internal-Key) still does not succeed against the current upstream; declare-email/mojang-bind client methods were dead code and are deleted. |
-| [0005](./0005-contract-status.md) | Contract status | Accepted | 2026-11-04 | WinnerProxy's external surface is documented by HA-Contract `docs/dev/WinnerProxy/README.md` plus `docs/api/openapi/winnerproxy-business.yaml` (added 2026-11-05, HA-Contract `c72bf82`). |
+| [0003](./0003-hrpauth-coupling-points.md) | Coupling points with HRPAuth core | Accepted | 2026-10-22 | WinnerProxy depends on HRPAuth OAuth2 client-credentials plus a fixed set of endpoints (Yggdrasil surface, `/internal/proxy-register`, `/services/*`); two clients (proxy vs management) with credential fallback. |
+| [0004](./0004-upstream-drift-and-dead-calls.md) | Outbound call status and open deployment question | Accepted | 2026-11-04 | All outbound calls succeed against the current upstream (batch failures surface as explicit 502 errors); the compose `HRPAUTH_YGG_URL` value is unverified against the live deployment. |
+| [0005](./0005-contract-status.md) | Contract status | Accepted | 2026-11-04 | WinnerProxy's external surface is documented by HA-Contract `docs/dev/WinnerProxy/README.md` plus `docs/api/openapi/winnerproxy-business.yaml`. |
