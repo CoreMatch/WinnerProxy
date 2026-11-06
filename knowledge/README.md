@@ -38,4 +38,8 @@ self-hosting and maintenance.
 | [0002](./0002-three-stage-hasjoined.md) | Three-stage hasJoined flow | Accepted | `hasJoined` tries HA first, then Mojang, then proxy-registers the Mojang player in HA; ambiguous/negative outcomes return 204, and `username_already_bound` rejects with 204. |
 | [0003](./0003-hrpauth-coupling-points.md) | Coupling points with HRPAuth core | Accepted | WinnerProxy depends on HRPAuth OAuth2 client-credentials plus a fixed set of endpoints (Yggdrasil surface, `/internal/proxy-register`, `/services/*`); two clients (proxy vs management) with credential fallback. |
 | [0004](./0004-upstream-drift-and-dead-calls.md) | Outbound call status and open deployment question | Accepted | All outbound calls succeed against the current upstream (batch failures surface as explicit 502 errors); the compose `HRPAUTH_YGG_URL` value is unverified against the live deployment. |
-| [0005](./0005-contract-status.md) | Contract status | Accepted | WinnerProxy's external surface is documented by HA-Contract `docs/dev/WinnerProxy/README.md` plus `docs/api/openapi/winnerproxy-business.yaml`. |
+| [0005](./0005-contract-status.md) | Contract status | Accepted | WinnerProxy's external surface is documented by [0006](./0006-service-contract.md) (migrated back from HA-Contract `docs/dev/WinnerProxy/README.md`) plus HA-Contract `docs/api/openapi/winnerproxy-business.yaml`. |
+| [0006](./0006-service-contract.md) | WinnerProxy service contract (inbound surface, outbound calls) | Accepted | Migrated back from HA-Contract `docs/dev/WinnerProxy/README.md` on 2026-11-07 (source: HA-Contract@bab2a05). |
+
+`archive/` holds historical snapshots migrated back from HA-Contract
+(`archive/docs/WinnerProxy/`): read-only reference material, may be stale.
