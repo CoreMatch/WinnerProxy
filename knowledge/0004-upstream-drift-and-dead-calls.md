@@ -20,7 +20,7 @@ deployment-side question.
    and the relay strips it (a base URL pointing directly at the
    microservice also works, since it serves the same prefix-less route).
    The upstream route is documented in HA-Contract
-   `/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/yggdrasil-api.md`
+   `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/knowledge/0010-yggdrasil-api-surface.md`
    §6. Upstream failures are mapped explicitly: upstream 404 → 502
    `{"error": "hrpauth batch endpoint missing"}`, other upstream/network
    failures → 502 `{"error": "hrpauth upstream unavailable"}`. No bare
@@ -37,7 +37,7 @@ deployment-side question.
    key parameter
    `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: InternalKeyHeader)`,
    key issuance
-   `/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/microservices.md (field: /services/auth-key)`.
+   `/home/lnb/Desktop/HA/HRPAuth/knowledge/0008-microservice-extension-layer.md (field: /services/auth-key)`.
 3. **Deployment-config question (not verified).** The compose template sets
    [xref] `HRPAUTH_YGG_URL: http://hrpauth-yggdrasil-api:2770/yggdrasil-api/`
    (direct container address *with* the relay prefix). The microservice
@@ -87,4 +87,4 @@ deployment-side question.
   (`RelayPathPrefix` =
   "the path prefix on the Core side that relays to this service").
 - Contract-side record of the same state:
-  `/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md (field: Outbound Calls)`.
+  `/home/lnb/Desktop/HA/WinnerProxy/knowledge/0006-service-contract.md (field: Outbound Calls)`.

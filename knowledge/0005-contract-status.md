@@ -17,11 +17,11 @@ WinnerProxy's external surface is largely the standard Yggdrasil protocol
      `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/winnerproxy-business.yaml`
      — wired into HA-Contract's method-level drift check.
    - HA-Contract
-     `/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md`
+     `/home/lnb/Desktop/HA/WinnerProxy/knowledge/0006-service-contract.md`
      — "WinnerProxy Service Contract": inbound route table, outbound call
      table, configuration notes.
    - HA-Contract Yggdrasil documentation
-     (`/home/lnb/Desktop/HA/HA-Contract/docs/dev/HRPAuth/yggdrasil-api.md`,
+     (`/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/knowledge/0010-yggdrasil-api-surface.md`,
      `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml`)
      for the upstream semantics WinnerProxy passes through.
 2. **Handling policy**:
@@ -46,7 +46,7 @@ WinnerProxy's external surface is largely the standard Yggdrasil protocol
 - OpenAPI file: repo HA-Contract,
   `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/winnerproxy-business.yaml`.
 - Dev contract: repo HA-Contract,
-  `/home/lnb/Desktop/HA/HA-Contract/docs/dev/WinnerProxy/README.md`
+  `/home/lnb/Desktop/HA/WinnerProxy/knowledge/0006-service-contract.md`
   (inbound surface table; outbound call table).
 - This repo's README scope (deployment/config only): `README.md:L1-L18`.
 - Yggdrasil protocol documentation pointers: repo HA-Contract,
