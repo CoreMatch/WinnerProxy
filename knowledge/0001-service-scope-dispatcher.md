@@ -68,6 +68,6 @@ account origin** — explicitly *not* a generic multi-upstream proxy pool:
   `internal/proxy/mojang.go::BatchQuery`
   (QueryProfile/BatchQuery implemented, no handler call site).
 - Interface symmetry note: `internal/proxy/upstream.go::UpstreamService`.
-- Mojang toggle: `main.go:L106-L114`; default upstream config
+- Mojang toggle: `main.go::main`; default upstream config
   `config/config.go::Default` (`official` = `https://api.minecraftservices.com`,
   [xref] `hrpauth` = `http://127.0.0.1:2778/yggdrasil-api/`).
