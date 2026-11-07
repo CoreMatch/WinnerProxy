@@ -9,6 +9,17 @@
 [SamuelWiki — WinnerProxy 配置说明](https://wiki.mcnb.dev/zh/projects/winnerproxy/configuration)
 （[English](https://wiki.mcnb.dev/projects/winnerproxy/configuration)）。
 
+## 部署事实
+
+部署事实以仓库根目录的 [`deploy-manifest.yaml`](deploy-manifest.yaml) 为准
+（供 HA-Services-Deployer 编排器读取；`manager: aapanel` 表示进程由面板管理，
+编排器只读不碰）：
+
+- 监听 `:2777`（对外）；健康端点 `GET /health`。
+- 依赖 HRPAuth（启动期凭据换取）与 HRPAuth-Yggdrasil-API（上游转发）。
+  无数据库、无 Redis（内存缓存）。
+- 配置文件 `config.yml`（模板版本 2）。
+
 ## 文档
 
 所有接口文档和开发规范已统一收口至根目录：
