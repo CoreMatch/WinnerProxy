@@ -23,6 +23,18 @@ facts:
       timeout_seconds: 5
       interval_seconds: 30
       retries: 3
+  smoke:
+    # 部署后冒烟：走一次 Yggdrasil hasJoined（sessionserver 路径）。
+    # 超长的随机用户名在 HA 与 Mojang 两侧都必然不存在：三级决策
+    # （HA → Mojang → proxy-register）真实跑过 HA 查询后确定性返回 204
+    # （internal/handler/handler.go HasJoined）。HRPAuth 后端不可用时
+    # 走 500/503 分支，断言如实失败。用户名超过 Mojang 16 字符上限，
+    # 保证永不命中真实账号、不产生注册副作用。
+    - name: hasjoined-probe
+      method: GET
+      path: /sessionserver/session/minecraft/hasJoined?username=ha_smoke_probe_zz9999&server=ha-smoke
+      expect_status: 204
+      timeout_seconds: 15
   depends_on:
     # 启动期经 HRPAuth /oauth/register 自助换取凭据（main.go 提示凭据必填）；
     # upstreams.hrpauth.url 直连 Yggdrasil-API 微服务（模板注释：不带 relay 前缀）。
