@@ -56,7 +56,7 @@ implementation).
 ## Evidence
 
 - Flow implementation: `internal/handler/handler.go::HasJoined`; stage
-  comments at `internal/handler/handler.go:L49-L53`.
+  comments at `internal/handler/handler.go:L49-L53 ~ Three-stage flow:`.
 - HA empty-200 → ErrNoProfile: `internal/hrpauth/endpoints.go::HasJoined`
   (empty-profile check in the 200 branch).
 - Mojang leg: `internal/proxy/mojang.go::HasJoined` (204/404 →
