@@ -1,0 +1,59 @@
+# WinnerProxy 部署声明（deploy-manifest v1）
+# schema 依据：HA-Services-Deployer internal/manifest/（SchemaVersion=1）
+manifest_version: 1
+kind: service
+project: winnerproxy
+display_name: WinnerProxy
+group: satellite
+# 模板 site.version: "0.2.0"（无 git 版本 tag）。
+service_version: "0.2.0"
+
+facts:
+  ports:
+    # deploy/config/winnerproxy.yaml.tmpl: server.addr ":2777"；compose 默认对外映射
+    - name: http
+      port: 2777
+      exposure: public
+  health:
+    # internal/router/router.go r.GET("/health", h.Health)；compose healthcheck 同路径
+    http:
+      port_name: http
+      path: /health
+      expect_status: 200
+      timeout_seconds: 5
+      interval_seconds: 30
+      retries: 3
+  depends_on:
+    # 启动期经 HRPAuth /oauth/register 自助换取凭据（main.go 提示凭据必填）；
+    # upstreams.hrpauth.url 直连 Yggdrasil-API 微服务（模板注释：不带 relay 前缀）。
+    # compose depends_on hrpauth + hrpauth-yggdrasil-api 均 service_healthy。
+    # 无数据库、无 redis（模板无对应段，缓存为内存缓存）。
+    - project: hrpauth
+      kind: required
+    - project: hrpauth-yggdrasil-api
+      kind: required
+  migration:
+    # 无数据库。配置文件版本化（version: "2"）由启动期配置迁移框架处理，
+    # 无持久层 schema 迁移。
+    mode: none
+  data_dirs: []
+  config:
+    # main.go configFileName="config.yml"（注意是 .yml 后缀）。
+    # 模板版本 = 模板首行 version: "2"。
+    - path: config.yml
+      template_version: "2"
+  static_assets: ""
+
+baremetal:
+  process:
+    manager: aapanel
+  install:
+    # PROD-FILEREFRESH-20261107 §1：二进制在位路径 /www/wwwroot/wp/winnerproxy
+    root: /www/wwwroot/wp
+    binary_name: winnerproxy
+  artifact:
+    source: local_path
+    local_path: /home/lnb/Desktop/HA/WinnerProxy/build/winnerproxy
+
+container:
+  enabled: false
