@@ -65,7 +65,7 @@ baremetal:
     binary_name: winnerproxy
   artifact:
     source: local_path
-    local_path: /home/lnb/Desktop/HA/WinnerProxy/build/winnerproxy
+    local_path: build/winnerproxy
 
 container:
   enabled: false
