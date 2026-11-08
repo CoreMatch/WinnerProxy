@@ -1,3 +1,4 @@
+<!-- anchor-policy: archival -->
 # WinnerProxy
 
 > A thin Yggdrasil protocol-translation layer that lets Mojang-authenticated and HRPAuth-authenticated players share a single in-game identity.
