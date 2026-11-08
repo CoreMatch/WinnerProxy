@@ -72,4 +72,4 @@ upstreams:
 
 ### License
 
-See [LICENSE](LICENSE).
+See `LICENSE`.
