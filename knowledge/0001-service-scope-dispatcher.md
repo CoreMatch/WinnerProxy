@@ -49,7 +49,7 @@ account origin** — explicitly *not* a generic multi-upstream proxy pool:
   externally visible behavior and belongs to HA-Contract's process, not a
   local decision.
 - The authoritative inbound/outbound table lives in HA-Contract
-  (`/home/lnb/Desktop/HA/WinnerProxy/knowledge/0006-service-contract.md`);
+  (`/home/lnb/Desktop/HA/hrpauth/WinnerProxy/knowledge/0006-service-contract.md`);
   this entry records the internal dispatch design.
 
 ## Evidence

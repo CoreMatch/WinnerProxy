@@ -20,7 +20,7 @@ deployment-side question.
    and the relay strips it (a base URL pointing directly at the
    microservice also works, since it serves the same prefix-less route).
    The upstream route is documented in HA-Contract
-   `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/knowledge/0010-yggdrasil-api-surface.md`
+   `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/knowledge/0010-yggdrasil-api-surface.md`
    §6. Upstream failures are mapped explicitly: upstream 404 → 502
    `{"error": "hrpauth batch endpoint missing"}`, other upstream/network
    failures → 502 `{"error": "hrpauth upstream unavailable"}`. No bare
@@ -37,7 +37,7 @@ deployment-side question.
    key parameter
    `/home/lnb/Desktop/HA/HA-Contract/docs/api/openapi/hrpauth-yggdrasil-business.yaml (field: InternalKeyHeader)`,
    key issuance
-   `/home/lnb/Desktop/HA/HRPAuth/knowledge/0008-microservice-extension-layer.md (field: /services/auth-key)`.
+   `/home/lnb/Desktop/HA/hrpauth/HRPAuth/knowledge/0008-microservice-extension-layer.md (field: /services/auth-key)`.
 3. **Deployment-config question (not verified).** The compose template sets
    [xref] `HRPAUTH_YGG_URL: http://hrpauth-yggdrasil-api:2770/yggdrasil-api/`
    (direct container address *with* the relay prefix). The microservice
@@ -66,25 +66,25 @@ deployment-side question.
 - Batch query path: `internal/hrpauth/endpoints.go::BatchQuery`; handler
   error mapping `internal/handler/handler.go::BatchQuery`.
 - Upstream batch route:
-  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go::BatchProfiles`
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/main.go::BatchProfiles`
   (`api.POST("/profiles/minecraft", ...)` under `r.Group("/api")`).
 - Relay prefix stripping:
-  `/home/lnb/Desktop/HA/HRPAuth/controllers/relay_controller.go::Match`,
-  `/home/lnb/Desktop/HA/HRPAuth/controllers/relay_controller.go::RelayMiddleware`.
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth/controllers/relay_controller.go::Match`,
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth/controllers/relay_controller.go::RelayMiddleware`.
 - Register body sent: `internal/hrpauth/types.go::RegisterRequest`;
   response expectation `internal/hrpauth/types.go::RegisterResponse`;
   client mapping `internal/hrpauth/endpoints.go::RegisterByProxy`.
 - Proxy-register endpoint + X-Internal-Key:
-  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/controllers/internal_controller.go::ProxyRegister`,
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/controllers/internal_controller.go::ProxyRegister`,
   route
-  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/main.go::ProxyRegister`.
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/main.go::ProxyRegister`.
 - Internal-key fetch: `internal/hrpauth/client.go::FetchInternalKey`.
 - Compose value:
-  `/home/lnb/Desktop/HA/HA-Services-Deployer/deploy/docker-compose.yml (field: HRPAUTH_YGG_URL)`;
+  `/home/lnb/Desktop/HA/maintanance/HA-Services-Deployer/deploy/docker-compose.yml (field: HRPAUTH_YGG_URL)`;
   relay prefix is a core-side concept:
-  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/config/config.go::RelayPathPrefix`,
-  `/home/lnb/Desktop/HA/HRPAuth-Yggdrasil-API/config/config.go::DefaultRelayPathPrefix`
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/config/config.go::RelayPathPrefix`,
+  `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/config/config.go::DefaultRelayPathPrefix`
   (`RelayPathPrefix` =
   "the path prefix on the Core side that relays to this service").
 - Contract-side record of the same state:
-  `/home/lnb/Desktop/HA/WinnerProxy/knowledge/0006-service-contract.md (field: Outbound Calls)`.
+  `/home/lnb/Desktop/HA/hrpauth/WinnerProxy/knowledge/0006-service-contract.md (field: Outbound Calls)`.
