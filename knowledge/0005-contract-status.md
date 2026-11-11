@@ -48,6 +48,6 @@ WinnerProxy's external surface is largely the standard Yggdrasil protocol
 - Dev contract: repo HA-Contract,
   `/home/lnb/Desktop/HA/hrpauth/WinnerProxy/knowledge/0006-service-contract.md`
   (inbound surface table; outbound call table).
-- This repo's README scope (deployment/config only): `README.md:L1-L18 fp=56ad2159 ~ WinnerProxy`.
+- This repo's README scope (deployment/config only): `README.md:L1-L18 fp=2dc13979 ~ WinnerProxy`.
 - Yggdrasil protocol documentation pointers: repo HA-Contract,
   `/home/lnb/Desktop/HA/HA-Contract/docs/api/README.md (field: External Protocol Compliance)`.
