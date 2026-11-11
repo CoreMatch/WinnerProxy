@@ -77,5 +77,5 @@ container:
   image:
     source: registry
     repo: limeight/ha-winnerproxy
-    tag: "0.2.0-de34ed2"
+    tag: "0.2.0-0a3ee27"
     digest: "sha256:51795ffad54b8bb90e36470ae857f0414c26eb64185e7562aa999eecbda0b7bc"
