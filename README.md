@@ -6,8 +6,7 @@
 
 配置文件为工作目录下的 `config.yml`（首次启动自动生成），默认监听
 `:2777`。完整配置参考见
-[SamuelWiki — WinnerProxy 配置说明](https://wiki.mcnb.dev/zh/projects/winnerproxy/configuration)
-（[English](https://wiki.mcnb.dev/projects/winnerproxy/configuration)）。
+[HRPAuth-Wiki — WinnerProxy 配置说明](https://wiki.mcnb.dev/deploy/winnerproxy)。
 
 ## 部署事实
 
