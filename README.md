@@ -11,7 +11,7 @@
 ## 部署事实
 
 部署事实以仓库根目录的 [`deploy-manifest.yaml`](deploy-manifest.yaml) 为准
-（供 HA-Services-Deployer 编排器读取；`manager: aapanel` 表示进程由面板管理，
+（供 HA-Cupbearer 编排器读取；`manager: aapanel` 表示进程由面板管理，
 编排器只读不碰）：
 
 - 监听 `:2777`（对外）；健康端点 `GET /health`。

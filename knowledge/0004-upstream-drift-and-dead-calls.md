@@ -58,7 +58,7 @@ deployment-side question.
 - Item 3 (compose `HRPAUTH_YGG_URL` with the relay prefix pointing at the
   microservice container) is a deployment-side property: with that value
   the batch call 404s and surfaces as the explicit 502 `hrpauth batch
-  endpoint missing`. The compose template belongs to the Deployer
+  endpoint missing`. The compose template belongs to the Cupbearer
   repository; the deployment-side value still needs verification.
 
 ## Evidence
@@ -80,7 +80,7 @@ deployment-side question.
   `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/main.go::ProxyRegister`.
 - Internal-key fetch: `internal/hrpauth/client.go::FetchInternalKey`.
 - Compose value:
-  `/home/lnb/Desktop/HA/maintanance/HA-Services-Deployer/deploy/docker-compose.yml (field: HRPAUTH_YGG_URL)`;
+  `/home/lnb/Desktop/HA/maintanance/HA-Cupbearer/deploy/docker-compose.yml (field: HRPAUTH_YGG_URL)`;
   relay prefix is a core-side concept:
   `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/config/config.go::RelayPathPrefix`,
   `/home/lnb/Desktop/HA/hrpauth/HRPAuth-Yggdrasil-API/config/config.go::DefaultRelayPathPrefix`
