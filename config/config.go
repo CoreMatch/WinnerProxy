@@ -183,7 +183,7 @@ func Default() *Config {
 		},
 		Site: SiteConfig{
 			Name:    "WinnerProxy",
-			Version: "0.2.0",
+			Version: "1.3.0",
 		},
 		Version: "2",
 	}

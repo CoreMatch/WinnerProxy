@@ -5,8 +5,8 @@ kind: service
 project: winnerproxy
 display_name: WinnerProxy
 group: satellite
-# 模板 site.version: "0.2.0"（无 git 版本 tag）。
-service_version: "0.2.0"
+# 模板 site.version: "1.3.0"。
+service_version: "1.3.0"
 
 facts:
   ports:
