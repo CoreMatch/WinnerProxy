@@ -1,32 +1,27 @@
-# WinnerProxy
+<div align="center">
+  <h1>WinnerProxy</h1>
+  <p><strong>Mixed HA and Mojang players, one join path.</strong></p>
+  <p><a href="./README.zh-CN.md">简体中文</a></p>
+</div>
 
-本项目是 HA-Contract 的代理服务组件。
+WinnerProxy routes Minecraft server join checks for deployments where HA and Mojang accounts share a server.
 
-## 1.3.0 与后续方向
+It preserves Mojang UUIDs and skins while protecting HA profiles from identity collisions.
 
-WinnerProxy 1.3.0 是最后一个将“server owner 自行搭建 HA”作为默认路径的版本。后续版本拟将维护者运营的公共 HA 作为一等接入选项，重点改善非站长 server owner 的接入体验。这里表达的是设计意图，不代表弃用自建、承诺改变默认策略或给出时间表；自建部署仍受支持。
+## Why WinnerProxy
 
-## 配置
+- **Route in three stages.** Apply the hasJoined routing sequence before accepting a join.
+- **Fall back only where intended.** Use Mojang authentication only for hasJoined requests.
+- **Preserve official identities.** Keep Mojang UUIDs and skins attached to those players.
+- **Reject collisions.** Refuse ambiguous profile matches rather than bind the wrong identity.
+- **Cache decisions.** Reuse join results in memory to reduce repeated upstream work.
 
-配置文件为工作目录下的 `config.yml`（首次启动自动生成），默认监听
-`:2777`。完整配置参考见
-[HRPAuth-Wiki — WinnerProxy 配置说明](https://wiki.mcnb.dev/deploy/winnerproxy)。
+## Learn more
 
-## 部署事实
+- [WinnerProxy deployment](https://wiki.mcnb.dev/deploy/winnerproxy) — service guide
+- [HA Wiki](https://wiki.mcnb.dev/) — ecosystem documentation
+- [HA-Contract](https://github.com/CoreMatch/HA-Contract) — ecosystem API contracts
 
-部署事实以仓库根目录的 [`deploy-manifest.yaml`](deploy-manifest.yaml) 为准
-（供 HA-Cupbearer 编排器读取；`manager: aapanel` 表示进程由面板管理，
-编排器只读不碰）：
+## License & provenance
 
-- 监听 `:2777`（对外）；健康端点 `GET /health`。
-- 依赖 HRPAuth（启动期凭据换取）与 HRPAuth-Yggdrasil-API（上游转发）。
-  无数据库、无 Redis（内存缓存）。
-- 配置文件 `config.yml`（模板版本 2）。
-
-## 文档
-
-所有接口文档和开发规范已统一收口至根目录：
-- [API 标准与规范](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/README.md)
-- [错误码表](https://github.com/CoreMatch/HA-Contract/blob/main/docs/api/error-codes.md)
-
-旧文档已归档至 [archive/docs/WinnerProxy](https://github.com/CoreMatch/HA-Contract/tree/main/archive/docs/WinnerProxy)。
+[AGPL-3.0](LICENSE). Source: [CoreMatch/WinnerProxy](https://github.com/CoreMatch/WinnerProxy).
