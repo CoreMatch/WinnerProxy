@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -81,27 +82,24 @@ func main() {
 	// (RFC 7591 protected registration) and the super secret is discarded
 	// from memory. Credentials that are already a per-service client are
 	// reused unchanged (idempotent path — no exchange, no write-back).
-	// Any failure aborts startup: super credentials must never reach
-	// business requests, and there is no fallback to running with
-	// unverified credentials.
+	// Connection-level failures are retried (hrpauth.retry.startup_attempts,
+	// default 10, every startup_interval_sec). If HRPAuth is still
+	// unreachable afterwards the proxy starts in degraded mode and a
+	// background loop reconnects every reconnect_interval_sec; the
+	// unverified (possibly super) credentials are kept out of every client
+	// until resolution succeeds. Authoritative credential rejections still
+	// abort startup: super credentials must never reach business requests.
+	retryCfg := cfg.Hrpauth.Retry.Normalized()
+	resolved := true
+	var superID, superSecret string
 	if mgmtClientID != "" && mgmtClientSecret != "" {
-		superID, superSecret := mgmtClientID, mgmtClientSecret
-
-		// The register endpoint only accepts presence-registered service
-		// names, so the bonjour handshake goes first. It is a plain
-		// request: no token may be attached before the credentials are
-		// resolved (the super secret is used for the exchange call only).
-		if cfg.Hrpauth.Presence.Enabled {
-			if err := hrpauth.RegisterPresencePlain(mgmtURL, buildPresenceRequest(cfg.Hrpauth.Presence, nil), nil); err != nil {
-				log.Printf("Presence: bootstrap registration failed: %v (a super-credential exchange will be rejected until presence succeeds)", err)
-			}
-		}
-
-		res, err := hrpauth.ResolveServiceCredentials(mgmtURL, cfg.Hrpauth.Presence.Name, mgmtClientID, mgmtClientSecret, nil)
+		superID, superSecret = mgmtClientID, mgmtClientSecret
+		res, err := resolveCredentialsWithRetry(mgmtURL, cfg, mgmtClientID, mgmtClientSecret, retryCfg)
 		if err != nil {
-			log.Fatalf("credential resolution failed (refusing to start with unverified or super credentials): %v", err)
-		}
-		if res.Exchanged {
+			resolved = false
+			log.Printf("WARN: HRPAuth unreachable after %d startup attempts: %v — starting in degraded mode (HRPAuth integration disabled), reconnecting every %ds",
+				retryCfg.StartupAttempts, err, retryCfg.ReconnectIntervalSec)
+		} else if res.Exchanged {
 			log.Printf("credentials: super client detected and exchanged for per-service client %q; super credentials discarded from memory", res.ClientID)
 			applyResolvedCredentials(cfg, cfgPath, superID, superSecret, res)
 			mgmtClientID, mgmtClientSecret = res.ClientID, res.ClientSecret
@@ -110,10 +108,20 @@ func main() {
 		}
 	}
 
+	proxyID, proxySecret := cfg.Upstreams.Hrpauth.ClientID, cfg.Upstreams.Hrpauth.ClientSecret
+	mgmtID, mgmtSecret := mgmtClientID, mgmtClientSecret
+	if !resolved {
+		// Unverified credentials must not reach business or management
+		// requests; the reconnect loop installs the verified pair via
+		// SetCredentials once HRPAuth answers.
+		proxyID, proxySecret = "", ""
+		mgmtID, mgmtSecret = "", ""
+	}
+
 	hrpauthProxyCli := hrpauth.New(
 		cfg.Upstreams.Hrpauth.URL,
-		cfg.Upstreams.Hrpauth.ClientID,
-		cfg.Upstreams.Hrpauth.ClientSecret,
+		proxyID,
+		proxySecret,
 		nil,
 	)
 	// The proxy-registration key is issued per presence-registry name.
@@ -121,23 +129,28 @@ func main() {
 
 	hrpauthMgmtCli := hrpauth.New(
 		mgmtURL,
-		mgmtClientID,
-		mgmtClientSecret,
+		mgmtID,
+		mgmtSecret,
 		nil,
 	)
 
-	// 2.2 Upload the compile-time SDK package to HRPAuth (if configured),
-	// non-blocking. The WEBUI SDK handler aggregates it into the frontend
-	// build.
-	if cfg.Hrpauth.SDK.Enabled {
-		uploadSDKPackage(hrpauthMgmtCli)
-	}
+	if resolved {
+		// 2.2 Upload the compile-time SDK package to HRPAuth (if configured),
+		// non-blocking. The WEBUI SDK handler aggregates it into the frontend
+		// build.
+		if cfg.Hrpauth.SDK.Enabled {
+			uploadSDKPackage(hrpauthMgmtCli)
+		}
 
-	// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
-	// Registers the service and its relay rules, then fetches the
-	// X-Internal-Key used by proxy registration.
-	if cfg.Hrpauth.Presence.Enabled {
-		announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL)
+		// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
+		// Registers the service and its relay rules, then fetches the
+		// X-Internal-Key used by proxy registration.
+		if cfg.Hrpauth.Presence.Enabled {
+			announcePresence(hrpauthMgmtCli, hrpauthProxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL)
+		}
+	} else {
+		go reconnectToHrpauth(mgmtURL, cfg, cfgPath, superID, superSecret,
+			hrpauthMgmtCli, hrpauthProxyCli, time.Duration(retryCfg.ReconnectIntervalSec)*time.Second)
 	}
 
 	services := []proxy.UpstreamService{
@@ -159,6 +172,87 @@ func main() {
 	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)
 	if err := engine.Run(cfg.Server.Addr); err != nil {
 		log.Fatalf("server stopped: %v", err)
+	}
+}
+
+// resolveCredentialsWithRetry runs the presence bootstrap plus credential
+// resolution, retrying connection-level failures (hrpauth.ErrUpstream) up
+// to retry.StartupAttempts times, retry.StartupIntervalSec apart. An
+// authoritative rejection aborts startup immediately — retrying cannot
+// fix wrong credentials. When all attempts fail with connection errors
+// the last error is returned so the caller can start in degraded mode.
+func resolveCredentialsWithRetry(mgmtURL string, cfg *config.Config, clientID, clientSecret string, retry config.RetryConfig) (*hrpauth.Resolution, error) {
+	interval := time.Duration(retry.StartupIntervalSec) * time.Second
+	var lastErr error
+	for attempt := 1; attempt <= retry.StartupAttempts; attempt++ {
+		// The register endpoint only accepts presence-registered service
+		// names, so the bonjour handshake goes first. It is a plain
+		// request: no token may be attached before the credentials are
+		// resolved (the super secret is used for the exchange call only).
+		if cfg.Hrpauth.Presence.Enabled {
+			if err := hrpauth.RegisterPresencePlain(mgmtURL, buildPresenceRequest(cfg.Hrpauth.Presence, nil), nil); err != nil {
+				log.Printf("Presence: bootstrap registration failed: %v (a super-credential exchange will be rejected until presence succeeds)", err)
+			}
+		}
+
+		res, err := hrpauth.ResolveServiceCredentials(mgmtURL, cfg.Hrpauth.Presence.Name, clientID, clientSecret, nil)
+		if err == nil {
+			return res, nil
+		}
+		if !errors.Is(err, hrpauth.ErrUpstream) {
+			log.Fatalf("credential resolution failed (refusing to start with unverified or super credentials): %v", err)
+		}
+		lastErr = err
+		if attempt < retry.StartupAttempts {
+			log.Printf("HRPAuth unreachable (attempt %d/%d): %v — retrying in %ds",
+				attempt, retry.StartupAttempts, err, retry.StartupIntervalSec)
+			time.Sleep(interval)
+		}
+	}
+	return nil, lastErr
+}
+
+// reconnectToHrpauth is the degraded-startup recovery loop: it retries
+// the presence bootstrap plus credential resolution every interval until
+// HRPAuth answers. On success the verified credentials are installed into
+// both clients and the deferred SDK/presence registrations run. An
+// authoritative credential rejection stops the loop with a loud error —
+// the proxy keeps serving, but the HRPAuth integration stays disabled
+// until the config is fixed and the process restarted.
+func reconnectToHrpauth(mgmtURL string, cfg *config.Config, cfgPath, superID, superSecret string, mgmtCli, proxyCli *hrpauth.Client, interval time.Duration) {
+	for {
+		time.Sleep(interval)
+		if cfg.Hrpauth.Presence.Enabled {
+			if err := hrpauth.RegisterPresencePlain(mgmtURL, buildPresenceRequest(cfg.Hrpauth.Presence, nil), nil); err != nil {
+				log.Printf("HRPAuth reconnect: presence bootstrap failed: %v — next attempt in %s", err, interval)
+				continue
+			}
+		}
+		res, err := hrpauth.ResolveServiceCredentials(mgmtURL, cfg.Hrpauth.Presence.Name, superID, superSecret, nil)
+		if err != nil {
+			if errors.Is(err, hrpauth.ErrUpstream) {
+				log.Printf("HRPAuth reconnect failed: %v — next attempt in %s", err, interval)
+				continue
+			}
+			log.Printf("ERROR: HRPAuth reconnect gave up: %v — HRPAuth integration stays disabled; fix the credentials/config and restart", err)
+			return
+		}
+		if res.Exchanged {
+			log.Printf("credentials: super client detected and exchanged for per-service client %q; super credentials discarded from memory", res.ClientID)
+			applyResolvedCredentials(cfg, cfgPath, superID, superSecret, res)
+		} else {
+			log.Printf("credentials: configured client %q confirmed as per-service client (no exchange needed)", superID)
+		}
+		mgmtCli.SetCredentials(res.ClientID, res.ClientSecret)
+		proxyCli.SetCredentials(cfg.Upstreams.Hrpauth.ClientID, cfg.Upstreams.Hrpauth.ClientSecret)
+		log.Printf("HRPAuth reconnect: credentials resolved, resuming SDK/presence registration")
+		if cfg.Hrpauth.SDK.Enabled {
+			uploadSDKPackage(mgmtCli)
+		}
+		if cfg.Hrpauth.Presence.Enabled {
+			announcePresence(mgmtCli, proxyCli, cfg.Hrpauth.Presence, cfg.Server.PublicURL)
+		}
+		return
 	}
 }
 

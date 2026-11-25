@@ -55,11 +55,13 @@ var (
 // Client is a thin HTTP client for HRPAuth. One instance per WinnerProxy
 // process; safe for concurrent use.
 type Client struct {
-	baseURL string
-	rootURL string
-	http    HTTPDoer
+	baseURL  string
+	rootURL  string
+	tokenURL string
+	ctx      context.Context
 
 	mu          sync.Mutex
+	http        HTTPDoer
 	serviceName string // presence-registry name, used when fetching the internal key
 	internalKey string // X-Internal-Key value, empty until fetched
 }
@@ -98,10 +100,37 @@ func New(baseURL, clientID, clientSecret string, doer HTTPDoer) *Client {
 	}
 
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		rootURL: rootURL,
-		http:    conf.Client(ctx),
+		baseURL:  strings.TrimRight(baseURL, "/"),
+		rootURL:  rootURL,
+		tokenURL: tokenURL,
+		ctx:      ctx,
+		http:     conf.Client(ctx),
 	}
+}
+
+// SetCredentials replaces the OAuth2 client credentials and rebuilds the
+// token-attaching HTTP client. It exists for the degraded-startup path:
+// when HRPAuth was unreachable at boot the client is constructed with
+// empty credentials and receives the verified pair once the background
+// reconnect resolves them. Safe for concurrent use.
+func (c *Client) SetCredentials(clientID, clientSecret string) {
+	conf := &clientcredentials.Config{
+		ClientID:     strings.TrimSpace(clientID),
+		ClientSecret: strings.TrimSpace(clientSecret),
+		TokenURL:     c.tokenURL,
+	}
+	cli := conf.Client(c.ctx)
+	c.mu.Lock()
+	c.http = cli
+	c.mu.Unlock()
+}
+
+// doer returns the current token-attaching HTTP client under the lock so
+// SetCredentials can swap it while requests are in flight.
+func (c *Client) doer() HTTPDoer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.http
 }
 
 // SetServiceName records this service's presence-registry name, used when
@@ -139,7 +168,7 @@ func (c *Client) FetchInternalKey() error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := c.doer().Do(req)
 	if err != nil {
 		return fmt.Errorf("hrpauth: fetch internal key: %w", err)
 	}
@@ -185,7 +214,7 @@ func (c *Client) doGet(path, query string) (*http.Response, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	return c.http.Do(req)
+	return c.doer().Do(req)
 }
 
 // doPost issues a POST with a JSON-encoded body. The caller decides
@@ -214,5 +243,5 @@ func (c *Client) doPostHeaders(path string, body interface{}, headers map[string
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-	return c.http.Do(req)
+	return c.doer().Do(req)
 }
