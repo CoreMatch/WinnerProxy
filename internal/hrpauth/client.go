@@ -28,28 +28,28 @@ type HTTPDoer interface {
 var (
 	// ErrNoProfile means HA returned 204 (or an empty profile) — the
 	// player has no active session.
-	ErrNoProfile = errors.New("hrpauth: no profile")
+	ErrNoProfile = errors.New("Armorial: no profile")
 
 	// ErrUsernameBound means HA returned 409 with error code
 	// "username_already_bound" — the username is taken by a non-bindable
 	// HA account; the Mojang player must be rejected.
-	ErrUsernameBound = errors.New("hrpauth: username already bound")
+	ErrUsernameBound = errors.New("Armorial: username already bound")
 
 	// ErrInvalidInput means HA returned 400 with a stable error code
 	// (e.g. "invalid_mojang_uuid") — the request was malformed.
-	ErrInvalidInput = errors.New("hrpauth: invalid input")
+	ErrInvalidInput = errors.New("Armorial: invalid input")
 
 	// ErrUpstream covers 5xx, network errors, timeouts, and JSON
 	// decode failures. The handler treats this as transient.
-	ErrUpstream = errors.New("hrpauth: upstream unavailable")
+	ErrUpstream = errors.New("Armorial: upstream unavailable")
 
 	// ErrEndpointMissing means HA answered 404 for a route that is
 	// supposed to exist — typically relay-prefix or contract drift.
 	// The handler maps it to an explicit 502, never a bare 500.
-	ErrEndpointMissing = errors.New("hrpauth: endpoint missing (upstream 404)")
+	ErrEndpointMissing = errors.New("Armorial: endpoint missing (upstream 404)")
 
 	// ErrSDKPackageConflict means the SDK package already exists (409).
-	ErrSDKPackageConflict = errors.New("hrpauth: sdk package conflict")
+	ErrSDKPackageConflict = errors.New("Armorial: sdk package conflict")
 )
 
 // Client is a thin HTTP client for HRPAuth. One instance per WinnerProxy
@@ -151,7 +151,7 @@ func (c *Client) FetchInternalKey() error {
 	name := c.serviceName
 	c.mu.Unlock()
 	if name == "" {
-		return errors.New("hrpauth: service name not configured (SetServiceName)")
+		return errors.New("Armorial: service name not configured (SetServiceName)")
 	}
 
 	var buf bytes.Buffer
@@ -170,21 +170,21 @@ func (c *Client) FetchInternalKey() error {
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.doer().Do(req)
 	if err != nil {
-		return fmt.Errorf("hrpauth: fetch internal key: %w", err)
+		return fmt.Errorf("Armorial: fetch internal key: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		return fmt.Errorf("hrpauth: fetch internal key: upstream status %d", resp.StatusCode)
+		return fmt.Errorf("Armorial: fetch internal key: upstream status %d", resp.StatusCode)
 	}
 	var result struct {
 		InternalKey string `json:"internal_key"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("hrpauth: fetch internal key: %w", err)
+		return fmt.Errorf("Armorial: fetch internal key: %w", err)
 	}
 	if result.InternalKey == "" {
-		return errors.New("hrpauth: fetch internal key: empty key in response")
+		return errors.New("Armorial: fetch internal key: empty key in response")
 	}
 
 	c.mu.Lock()

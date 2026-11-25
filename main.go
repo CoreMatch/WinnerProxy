@@ -33,15 +33,15 @@ func main() {
 	}
 
 	if cfg.Upstreams.Hrpauth.Enabled {
-		log.Printf("hrpauth upstream enabled (url=%s, timeout=%ds)",
+		log.Printf("Armorial upstream enabled (upstreams.hrpauth, url=%s, timeout=%ds)",
 			cfg.Upstreams.Hrpauth.URL, cfg.Upstreams.Hrpauth.TimeoutSec)
 		if cfg.Upstreams.Hrpauth.ClientID == "" || cfg.Upstreams.Hrpauth.ClientSecret == "" {
-			log.Fatalf("hrpauth upstream is enabled but upstreams.hrpauth.client_id/client_secret is empty: " +
-				"WinnerProxy cannot obtain a service token (needed for the X-Internal-Key used by proxy " +
+			log.Fatalf("Armorial upstream is enabled (upstreams.hrpauth) but upstreams.hrpauth.client_id/client_secret is empty: " +
+				"Armorial Winner Proxy cannot obtain a service token (needed for the X-Internal-Key used by proxy " +
 				"registration). Fill both values in config.yml, or set upstreams.hrpauth.enabled: false.")
 		}
 	} else {
-		log.Printf("hrpauth upstream disabled")
+		log.Printf("Armorial upstream disabled (upstreams.hrpauth)")
 	}
 
 	// Management client for Presence, SDK, and Relay registration.
@@ -73,17 +73,17 @@ func main() {
 	}
 
 	if mgmtClientID == "" {
-		log.Printf("WARN: No HRPAuth credentials found in config. Management tasks will fail.")
+		log.Printf("WARN: No Armorial credentials found in config. Management tasks will fail.")
 	}
 
 	// Startup credential resolution: when the configured credentials are
-	// HRPAuth's built-in super client, they are exchanged for
-	// WinnerProxy's own low-privilege client via POST /oauth/register
+	// Armorial's built-in super client, they are exchanged for
+	// Armorial Winner Proxy's own low-privilege client via POST /oauth/register
 	// (RFC 7591 protected registration) and the super secret is discarded
 	// from memory. Credentials that are already a per-service client are
 	// reused unchanged (idempotent path — no exchange, no write-back).
 	// Connection-level failures are retried (hrpauth.retry.startup_attempts,
-	// default 10, every startup_interval_sec). If HRPAuth is still
+	// default 10, every startup_interval_sec). If Armorial is still
 	// unreachable afterwards the proxy starts in degraded mode and a
 	// background loop reconnects every reconnect_interval_sec; the
 	// unverified (possibly super) credentials are kept out of every client
@@ -97,7 +97,7 @@ func main() {
 		res, err := resolveCredentialsWithRetry(mgmtURL, cfg, mgmtClientID, mgmtClientSecret, retryCfg)
 		if err != nil {
 			resolved = false
-			log.Printf("WARN: HRPAuth unreachable after %d startup attempts: %v — starting in degraded mode (HRPAuth integration disabled), reconnecting every %ds",
+			log.Printf("WARN: Armorial unreachable after %d startup attempts: %v — starting in degraded mode (Armorial integration disabled), reconnecting every %ds",
 				retryCfg.StartupAttempts, err, retryCfg.ReconnectIntervalSec)
 		} else if res.Exchanged {
 			log.Printf("credentials: super client detected and exchanged for per-service client %q; super credentials discarded from memory", res.ClientID)
@@ -113,7 +113,7 @@ func main() {
 	if !resolved {
 		// Unverified credentials must not reach business or management
 		// requests; the reconnect loop installs the verified pair via
-		// SetCredentials once HRPAuth answers.
+		// SetCredentials once Armorial answers.
 		proxyID, proxySecret = "", ""
 		mgmtID, mgmtSecret = "", ""
 	}
@@ -135,14 +135,14 @@ func main() {
 	)
 
 	if resolved {
-		// 2.2 Upload the compile-time SDK package to HRPAuth (if configured),
+		// 2.2 Upload the compile-time SDK package to Armorial (if configured),
 		// non-blocking. The WEBUI SDK handler aggregates it into the frontend
 		// build.
 		if cfg.Hrpauth.SDK.Enabled {
 			uploadSDKPackage(hrpauthMgmtCli)
 		}
 
-		// 2.1 Presence handshake with HRPAuth (bonjour), non-blocking.
+		// 2.1 Presence handshake with Armorial (bonjour), non-blocking.
 		// Registers the service and its relay rules, then fetches the
 		// X-Internal-Key used by proxy registration.
 		if cfg.Hrpauth.Presence.Enabled {
@@ -169,7 +169,7 @@ func main() {
 	h := handler.New(services, hrpauthProxyCli, buildCache(cfg.Cache))
 	engine := router.New(h)
 
-	log.Printf("WinnerProxy listening on %s", cfg.Server.Addr)
+	log.Printf("Armorial Winner Proxy listening on %s", cfg.Server.Addr)
 	if err := engine.Run(cfg.Server.Addr); err != nil {
 		log.Fatalf("server stopped: %v", err)
 	}
@@ -204,7 +204,7 @@ func resolveCredentialsWithRetry(mgmtURL string, cfg *config.Config, clientID, c
 		}
 		lastErr = err
 		if attempt < retry.StartupAttempts {
-			log.Printf("HRPAuth unreachable (attempt %d/%d): %v — retrying in %ds",
+			log.Printf("Armorial unreachable (attempt %d/%d): %v — retrying in %ds",
 				attempt, retry.StartupAttempts, err, retry.StartupIntervalSec)
 			time.Sleep(interval)
 		}
@@ -214,27 +214,27 @@ func resolveCredentialsWithRetry(mgmtURL string, cfg *config.Config, clientID, c
 
 // reconnectToHrpauth is the degraded-startup recovery loop: it retries
 // the presence bootstrap plus credential resolution every interval until
-// HRPAuth answers. On success the verified credentials are installed into
+// Armorial answers. On success the verified credentials are installed into
 // both clients and the deferred SDK/presence registrations run. An
 // authoritative credential rejection stops the loop with a loud error —
-// the proxy keeps serving, but the HRPAuth integration stays disabled
+// the proxy keeps serving, but the Armorial integration stays disabled
 // until the config is fixed and the process restarted.
 func reconnectToHrpauth(mgmtURL string, cfg *config.Config, cfgPath, superID, superSecret string, mgmtCli, proxyCli *hrpauth.Client, interval time.Duration) {
 	for {
 		time.Sleep(interval)
 		if cfg.Hrpauth.Presence.Enabled {
 			if err := hrpauth.RegisterPresencePlain(mgmtURL, buildPresenceRequest(cfg.Hrpauth.Presence, nil), nil); err != nil {
-				log.Printf("HRPAuth reconnect: presence bootstrap failed: %v — next attempt in %s", err, interval)
+				log.Printf("Armorial reconnect: presence bootstrap failed: %v — next attempt in %s", err, interval)
 				continue
 			}
 		}
 		res, err := hrpauth.ResolveServiceCredentials(mgmtURL, cfg.Hrpauth.Presence.Name, superID, superSecret, nil)
 		if err != nil {
 			if errors.Is(err, hrpauth.ErrUpstream) {
-				log.Printf("HRPAuth reconnect failed: %v — next attempt in %s", err, interval)
+				log.Printf("Armorial reconnect failed: %v — next attempt in %s", err, interval)
 				continue
 			}
-			log.Printf("ERROR: HRPAuth reconnect gave up: %v — HRPAuth integration stays disabled; fix the credentials/config and restart", err)
+			log.Printf("ERROR: Armorial reconnect gave up: %v — Armorial integration stays disabled; fix the credentials/config and restart", err)
 			return
 		}
 		if res.Exchanged {
@@ -245,7 +245,7 @@ func reconnectToHrpauth(mgmtURL string, cfg *config.Config, cfgPath, superID, su
 		}
 		mgmtCli.SetCredentials(res.ClientID, res.ClientSecret)
 		proxyCli.SetCredentials(cfg.Upstreams.Hrpauth.ClientID, cfg.Upstreams.Hrpauth.ClientSecret)
-		log.Printf("HRPAuth reconnect: credentials resolved, resuming SDK/presence registration")
+		log.Printf("Armorial reconnect: credentials resolved, resuming SDK/presence registration")
 		if cfg.Hrpauth.SDK.Enabled {
 			uploadSDKPackage(mgmtCli)
 		}
@@ -257,7 +257,7 @@ func reconnectToHrpauth(mgmtURL string, cfg *config.Config, cfgPath, superID, su
 }
 
 // announcePresence performs the presence (bonjour) handshake with
-// HRPAuth asynchronously. It registers WinnerProxy in HRPAuth's
+// Armorial asynchronously. It registers Armorial Winner Proxy in Armorial's
 // presence registry, registers relay rules, and fetches the
 // X-Internal-Key used by proxy registration; a failure is only logged
 // and never blocks or stops the main process.
@@ -265,8 +265,8 @@ func announcePresence(cli, proxyCli *hrpauth.Client, cfg config.PresenceConfig, 
 	go func() {
 		log.Printf("Presence: starting microservice registration (name=%s)", cfg.Name)
 
-		// Fetch server meta from upstream HRPAuth to include in RootMetadata.
-		// This allows HRPAuth to aggregate WinnerProxy's Yggdrasil info.
+		// Fetch server meta from upstream Armorial to include in RootMetadata.
+		// This allows Armorial to aggregate Armorial Winner Proxy's Yggdrasil info.
 		// We do this inside the goroutine to avoid blocking startup. The
 		// call re-upserts the presence record that the synchronous
 		// bootstrap handshake already created (with root_metadata this

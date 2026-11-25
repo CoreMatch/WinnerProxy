@@ -13,7 +13,7 @@ import (
 
 const (
 	// Key prefixes isolate the two namespaces inside the single
-	// freecache instance. HA profiles and Mojang profiles live in
+	// freecache instance. Armorial profiles and Mojang profiles live in
 	// the same store but with disjoint key sets.
 	keyPrefixHA     = "ha:profile:"
 	keyPrefixMojang = "mojang:hasjoined:"
@@ -79,7 +79,7 @@ func (f *FreeCache) GetHAProfile(uuid string) (*hrpauth.PlayerProfile, bool) {
 	}
 	var p hrpauth.PlayerProfile
 	if err := json.Unmarshal(v, &p); err != nil {
-		log.Printf("profile cache: decode HA profile uuid=%s: %v", uuid, err)
+		log.Printf("profile cache: decode Armorial profile uuid=%s: %v", uuid, err)
 		return nil, false
 	}
 	return &p, true
@@ -98,7 +98,7 @@ func (f *FreeCache) SetHAProfile(uuid string, p *hrpauth.PlayerProfile) error {
 		// ErrLargeEntry (entry > 1/1024 of cache size) is non-fatal:
 		// the next request will simply re-query the upstream.
 		if !errors.Is(err, freecache.ErrLargeEntry) {
-			log.Printf("profile cache: set HA uuid=%s: %v", uuid, err)
+			log.Printf("profile cache: set Armorial uuid=%s: %v", uuid, err)
 		}
 		return err
 	}

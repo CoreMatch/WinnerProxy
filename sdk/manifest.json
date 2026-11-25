@@ -6,18 +6,18 @@
     {
       "path": "/winner-proxy",
       "module": "src/pages/WinnerSetup",
-      "title": "Winner Proxy"
+      "title": "Armorial Winner Proxy"
     }
   ],
   "menu": [
     {
-      "label": "Winner Proxy",
+      "label": "Armorial Winner Proxy",
       "path": "/winner-proxy"
     }
   ],
   "dashboard": [
     {
-      "label": "Winner Proxy",
+      "label": "Armorial Winner Proxy",
       "path": "/winner-proxy"
     }
   ],

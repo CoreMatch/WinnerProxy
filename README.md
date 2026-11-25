@@ -1,14 +1,14 @@
 <div align="center">
-  <h1>WinnerProxy</h1>
-  <p><strong>Mixed HA and Mojang players, one join path.</strong></p>
+  <h1>Armorial Winner Proxy</h1>
+  <p><strong>Mixed Armorial and Mojang players, one join path.</strong></p>
   <p><a href="./README.zh-CN.md">简体中文</a></p>
 </div>
 
-WinnerProxy routes Minecraft server join checks for deployments where HA and Mojang accounts share a server.
+Armorial Winner Proxy routes Minecraft server join checks for deployments where Armorial and Mojang accounts share a server.
 
-It preserves Mojang UUIDs and skins while protecting HA profiles from identity collisions.
+It preserves Mojang UUIDs and skins while protecting Armorial profiles from identity collisions.
 
-## Why WinnerProxy
+## Why Armorial Winner Proxy
 
 - **Route in three stages.** Apply the hasJoined routing sequence before accepting a join.
 - **Fall back only where intended.** Use Mojang authentication only for hasJoined requests.
@@ -18,9 +18,9 @@ It preserves Mojang UUIDs and skins while protecting HA profiles from identity c
 
 ## Learn more
 
-- [WinnerProxy deployment](https://wiki.mcnb.dev/deploy/winnerproxy) — service guide
-- [HA Wiki](https://wiki.mcnb.dev/) — ecosystem documentation
-- [HA-Contract](https://github.com/CoreMatch/HA-Contract) — ecosystem API contracts
+- [Armorial Winner Proxy deployment](https://wiki.mcnb.dev/deploy/winnerproxy) — service guide
+- [Armorial Wiki](https://wiki.mcnb.dev/) — ecosystem documentation
+- [Armorial API Contracts](https://github.com/CoreMatch/HA-Contract) — ecosystem API contracts
 
 ## License & provenance
 

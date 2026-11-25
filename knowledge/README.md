@@ -9,15 +9,15 @@ self-hosting and maintenance.
 - These notes serve the people who operate and maintain WinnerProxy. They
   record decisions, their costs, and the evidence behind them.
 - **They do not define externally visible behavior.** External behavior is
-  defined by [HA-Contract](https://github.com/CoreMatch/HA-Contract) —
+  defined by [Armorial Contract](https://github.com/CoreMatch/HA-Contract) —
   for this service primarily `docs/dev/WinnerProxy/README.md` (the
   "WinnerProxy Service Contract", including the inbound surface and the
   outbound-call table), plus the Yggdrasil protocol documentation under
   `docs/dev/HRPAuth/` and `docs/api/openapi/hrpauth-yggdrasil-business.yaml`
   for the upstream semantics.
-- If an entry here conflicts with HA-Contract, **fix the entry, not the
+- If an entry here conflicts with Armorial Contract, **fix the entry, not the
   contract**. If the code conflicts with the contract, record the drift in
-  an entry and resolve it through HA-Contract's change process.
+  an entry and resolve it through Armorial Contract's change process.
 
 ## Rules
 

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const rewriteFixture = `# WinnerProxy deployment config
+const rewriteFixture = `# Armorial Winner Proxy deployment config
 version: "2"
 
 server:
@@ -64,7 +64,7 @@ func TestRewriteClientCredentialsReplacesMatchingPairs(t *testing.T) {
 	if strings.Count(text, "low-secret") != 2 || strings.Count(text, "client_id: WinnerProxy") != 2 {
 		t.Errorf("expected both sections to carry the new pair, got:\n%s", text)
 	}
-	if !strings.Contains(text, "# WinnerProxy deployment config") {
+	if !strings.Contains(text, "# Armorial Winner Proxy deployment config") {
 		t.Error("comments must survive the rewrite")
 	}
 

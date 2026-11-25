@@ -16,7 +16,7 @@ import (
 // neither the HRPAuth built-in super client nor a valid service client.
 // Startup must abort with this error; there is deliberately no fallback to
 // running business traffic with unverified or super credentials.
-var ErrCredentialsRejected = errors.New("hrpauth: credentials rejected")
+var ErrCredentialsRejected = errors.New("Armorial: credentials rejected")
 
 // Resolution is the outcome of the startup credential resolution.
 type Resolution struct {
@@ -119,7 +119,7 @@ func ResolveServiceCredentials(rootURL, serviceName, clientID, clientSecret stri
 			meta = env.Data
 		}
 		if meta.ClientID == "" || meta.ClientSecret == "" {
-			return nil, errors.New("hrpauth: credential exchange returned no client credentials")
+			return nil, errors.New("Armorial: credential exchange returned no client credentials")
 		}
 		return &Resolution{ClientID: meta.ClientID, ClientSecret: meta.ClientSecret, Exchanged: true}, nil
 
@@ -132,7 +132,7 @@ func ResolveServiceCredentials(rootURL, serviceName, clientID, clientSecret stri
 		if detail == "" {
 			detail = string(raw)
 		}
-		return nil, fmt.Errorf("hrpauth: super credentials detected but self-registration was rejected (%s): %s", env.Code, detail)
+		return nil, fmt.Errorf("Armorial: super credentials detected but self-registration was rejected (%s): %s", env.Code, detail)
 
 	case http.StatusUnauthorized:
 		// Not the super client: verify that the credentials are a valid
@@ -147,7 +147,7 @@ func ResolveServiceCredentials(rootURL, serviceName, clientID, clientSecret stri
 		if resp.StatusCode >= 500 {
 			return nil, fmt.Errorf("%w: credential exchange answered status %d", ErrUpstream, resp.StatusCode)
 		}
-		return nil, fmt.Errorf("hrpauth: credential exchange answered status %d", resp.StatusCode)
+		return nil, fmt.Errorf("Armorial: credential exchange answered status %d", resp.StatusCode)
 	}
 }
 
@@ -209,12 +209,12 @@ func RegisterPresencePlain(rootURL string, req PresenceRequest, doer HTTPDoer) e
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("hrpauth: presence registration request failed: %w", err)
+		return fmt.Errorf("Armorial: presence registration request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		return fmt.Errorf("hrpauth: presence registration returned status %d", resp.StatusCode)
+		return fmt.Errorf("Armorial: presence registration returned status %d", resp.StatusCode)
 	}
 	return nil
 }

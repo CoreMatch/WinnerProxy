@@ -12,7 +12,7 @@ func New(h *handler.Handler) *gin.Engine {
 
 	r.GET("/health", h.Health)
 
-	// WinnerProxy status endpoint: serve at both "/" and "/winnerproxy"
+	// Armorial Winner Proxy status endpoint: serve at both "/" and "/winnerproxy"
 	// so clients that probe the root path get a valid response.
 	r.GET("/", h.YggdrasilRoot)
 	r.GET("/winnerproxy", h.YggdrasilRoot)
@@ -20,7 +20,7 @@ func New(h *handler.Handler) *gin.Engine {
 	// Register every Yggdrasil route under both the prefix-less
 	// (Mojang-style) path and the "/winnerproxy" prefix. Minecraft
 	// launchers and legacy probes hit the prefix-less form, while
-	// HA's own clients use the prefixed form. The handler is
+	// Armorial's own clients use the prefixed form. The handler is
 	// identical, so we just bind the same function twice.
 	bindYggdrasil := func(group *gin.RouterGroup) {
 		group.GET("/sessionserver/session/minecraft/hasJoined", h.HasJoined)

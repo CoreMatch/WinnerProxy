@@ -1,6 +1,6 @@
-# WinnerProxy SDK
+# Armorial Winner Proxy SDK
 
-This SDK package provides a setup page for WinnerProxy, a Yggdrasil proxy service for HA-Contract.
+This SDK package provides a setup page for Armorial Winner Proxy, a Yggdrasil proxy service for Armorial.
 
 ## Features
 

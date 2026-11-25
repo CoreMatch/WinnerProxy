@@ -1,4 +1,4 @@
-// Package config loads WinnerProxy's runtime configuration from a YAML
+// Package config loads Armorial Winner Proxy's runtime configuration from a YAML
 // file. Fields are grouped into nested sections so the on-disk
 // structure mirrors the example layout in
 // docs/DEVELOPMENT-ROADMAP §8.3.
@@ -21,7 +21,7 @@ type Config struct {
 	Log LogConfig `yaml:"log"`
 	// Hrpauth controls the backend management integration (Presence, SDK).
 	Hrpauth HrpauthBackendConfig `yaml:"hrpauth"`
-	// Upstreams groups all upstream Mojang / HRPAuth endpoints.
+	// Upstreams groups all upstream Mojang / Armorial endpoints.
 	Upstreams UpstreamsConfig `yaml:"upstreams"`
 	// Site holds non-runtime metadata about the deployment.
 	Site SiteConfig `yaml:"site"`
@@ -79,13 +79,13 @@ type UpstreamConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
-// HrpauthConfig is the HRPAuth-specific upstream config.
+// HrpauthConfig is the Armorial-specific upstream config.
 type HrpauthConfig struct {
-	// URL is the HRPAuth base URL.
+	// URL is the Armorial base URL.
 	URL string `yaml:"url"`
-	// ClientID is the OAuth2 client ID for WinnerProxy.
+	// ClientID is the OAuth2 client ID for Armorial Winner Proxy.
 	ClientID string `yaml:"client_id"`
-	// ClientSecret is the OAuth2 client secret for WinnerProxy.
+	// ClientSecret is the OAuth2 client secret for Armorial Winner Proxy.
 	ClientSecret string `yaml:"client_secret"`
 	// TimeoutSec is the per-request timeout in seconds.
 	TimeoutSec int `yaml:"timeout_sec"`
@@ -94,30 +94,30 @@ type HrpauthConfig struct {
 }
 
 // PresenceConfig controls the microservice presence handshake with
-// HRPAuth (POST /services/presence, the "bonjour" handshake). The
-// handshake registers WinnerProxy in HRPAuth's in-process presence
+// Armorial (POST /services/presence, the "bonjour" handshake). The
+// handshake registers WinnerProxy in Armorial's in-process presence
 // registry so the main service knows it is online. A failed handshake
 // is logged but never blocks or stops the proxy.
 type PresenceConfig struct {
 	// Enabled toggles the presence handshake. Default true.
 	Enabled bool `yaml:"enabled"`
-	// Name is the service name registered in HRPAuth. Default "WinnerProxy".
+	// Name is the stable service identifier registered in Armorial. Default "WinnerProxy".
 	Name string `yaml:"name"`
 	// TTLSeconds is the self-declared lifetime in seconds; <=0 (default)
-	// means the record never expires and stays until HRPAuth stops.
+	// means the record never expires and stays until Armorial stops.
 	TTLSeconds int `yaml:"ttl_seconds"`
 }
 
-// SDKConfig controls the SDK package upload to HRPAuth.
+// SDKConfig controls the SDK package upload to Armorial.
 type SDKConfig struct {
-	// Enabled toggles whether the SDK package is uploaded to HRPAuth
+	// Enabled toggles whether the SDK package is uploaded to Armorial
 	// at startup. Supports 0/1 or boolean. Default true.
 	Enabled bool `yaml:"enabled"`
 }
 
-// RetryConfig controls how WinnerProxy retries the HRPAuth management
+// RetryConfig controls how WinnerProxy retries the Armorial management
 // connection. Startup credential resolution is attempted up to
-// StartupAttempts times (StartupIntervalSec apart); if HRPAuth is still
+// StartupAttempts times (StartupIntervalSec apart); if Armorial is still
 // unreachable afterwards the proxy starts anyway in degraded mode and a
 // background loop retries every ReconnectIntervalSec until it succeeds.
 // Values <=0 fall back to the built-in defaults.
@@ -149,20 +149,20 @@ func (r RetryConfig) Normalized() RetryConfig {
 	return r
 }
 
-// HrpauthBackendConfig controls the HRPAuth management integration.
+// HrpauthBackendConfig controls the Armorial management integration.
 type HrpauthBackendConfig struct {
-	// URL is the HRPAuth management base URL (usually the root path).
+	// URL is the Armorial management base URL (usually the root path).
 	URL string `yaml:"url"`
-	// ClientID is the OAuth2 client ID for WinnerProxy.
+	// ClientID is the OAuth2 client ID for Armorial Winner Proxy.
 	ClientID string `yaml:"client_id"`
-	// ClientSecret is the OAuth2 client secret for WinnerProxy.
+	// ClientSecret is the OAuth2 client secret for Armorial Winner Proxy.
 	ClientSecret string `yaml:"client_secret"`
 	// Presence controls the presence handshake.
 	Presence PresenceConfig `yaml:"presence"`
 	// SDK controls the SDK package upload.
 	SDK SDKConfig `yaml:"sdk"`
 	// Retry controls startup retries and background reconnection when
-	// HRPAuth is unreachable.
+	// Armorial is unreachable.
 	Retry RetryConfig `yaml:"retry"`
 }
 
@@ -170,7 +170,7 @@ type HrpauthBackendConfig struct {
 type UpstreamsConfig struct {
 	// Official is the upstream for the official Mojang services.
 	Official UpstreamConfig `yaml:"official"`
-	// Hrpauth is the upstream for the HRPAuth (HA) backend.
+	// Hrpauth is the upstream for the Armorial backend.
 	Hrpauth HrpauthConfig `yaml:"hrpauth"`
 }
 
@@ -224,7 +224,7 @@ func Default() *Config {
 			},
 		},
 		Site: SiteConfig{
-			Name:    "WinnerProxy",
+			Name:    "Armorial Winner Proxy",
 			Version: "1.3.0",
 		},
 		Version: "2",

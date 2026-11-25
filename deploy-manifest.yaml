@@ -1,9 +1,9 @@
-# WinnerProxy 部署声明（deploy-manifest v1）
+# Armorial Winner Proxy 部署声明（deploy-manifest v1）
 # schema 依据：HA-Cupbearer internal/manifest/（SchemaVersion=1）
 manifest_version: 1
 kind: service
 project: winnerproxy
-display_name: WinnerProxy
+display_name: Armorial Winner Proxy
 group: satellite
 # 模板 site.version: "1.3.0"。
 service_version: "1.3.0"
@@ -25,9 +25,9 @@ facts:
       retries: 3
   smoke:
     # 部署后冒烟：走一次 Yggdrasil hasJoined（sessionserver 路径）。
-    # 超长的随机用户名在 HA 与 Mojang 两侧都必然不存在：三级决策
-    # （HA → Mojang → proxy-register）真实跑过 HA 查询后确定性返回 204
-    # （internal/handler/handler.go HasJoined）。HRPAuth 后端不可用时
+    # 超长的随机用户名在 Armorial 与 Mojang 两侧都必然不存在：三级决策
+    # （Armorial → Mojang → proxy-register）真实跑过 Armorial 查询后确定性返回 204
+    # （internal/handler/handler.go HasJoined）。Armorial 后端不可用时
     # 走 500/503 分支，断言如实失败。用户名超过 Mojang 16 字符上限，
     # 保证永不命中真实账号、不产生注册副作用。
     - name: hasjoined-probe
@@ -36,7 +36,7 @@ facts:
       expect_status: 204
       timeout_seconds: 15
   depends_on:
-    # 启动期经 HRPAuth /oauth/register 自助换取凭据（main.go 提示凭据必填）；
+    # 启动期经 Armorial /oauth/register 自助换取凭据（main.go 提示凭据必填）；
     # upstreams.hrpauth.url 直连 Yggdrasil-API 微服务（模板注释：不带 relay 前缀）。
     # compose depends_on hrpauth + hrpauth-yggdrasil-api 均 service_healthy。
     # 无数据库、无 redis（模板无对应段，缓存为内存缓存）。

@@ -18,8 +18,8 @@ import (
 )
 
 // Handler dispatches Yggdrasil requests. HasJoined follows the
-// three-stage flow (HRPAuth → Mojang → proxy-register); QueryProfile /
-// BatchQuery / YggdrasilRoot go directly to HRPAuth.
+// three-stage flow (Armorial → Mojang → proxy-register); QueryProfile /
+// BatchQuery / YggdrasilRoot go directly to Armorial.
 type Handler struct {
 	Hrpauth  *hrpauth.Client
 	Services []proxy.UpstreamService
@@ -27,7 +27,7 @@ type Handler struct {
 }
 
 // New constructs a Handler. hrpauthCli is used for the three-stage
-// HasJoined and the direct HRPAuth calls in QueryProfile / BatchQuery /
+// HasJoined and the direct Armorial calls in QueryProfile / BatchQuery /
 // YggdrasilRoot. services is used to locate the MojangService for
 // stage 2. c is consulted for HA profile (uuid-keyed) and Mojang
 // profile (username-keyed) caching; pass cache.NewNoop() to disable.
@@ -69,7 +69,7 @@ func (h *Handler) HasJoined(c *gin.Context) {
 	}
 	if err != nil && !errors.Is(err, hrpauth.ErrNoProfile) {
 		// HA 5xx / network — log and continue to Mojang fallback.
-		log.Printf("hrpauth hasJoined error, falling back to mojang: %v", err)
+		log.Printf("Armorial hasJoined error, falling back to mojang: %v", err)
 	}
 
 	username := c.Query("username")
@@ -91,7 +91,7 @@ func (h *Handler) HasJoined(c *gin.Context) {
 					cached.Name, cached.ID)
 				c.Status(http.StatusNoContent)
 			case rerr != nil:
-				log.Printf("hrpauth register failed: %v", rerr)
+				log.Printf("Armorial register failed: %v", rerr)
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth backend unavailable"})
 			default:
 				c.JSON(http.StatusOK, &hrpauth.PlayerProfile{
@@ -134,7 +134,7 @@ func (h *Handler) HasJoined(c *gin.Context) {
 			mojangProfile.Name, mojangProfile.ID)
 		c.Status(http.StatusNoContent)
 	case err != nil:
-		log.Printf("hrpauth register failed: %v", err)
+		log.Printf("Armorial register failed: %v", err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth backend unavailable"})
 	default:
 		// Stage 3 success: HA identity (profile_id) + Mojang skin.
@@ -168,7 +168,7 @@ func generatePassword() (string, error) {
 }
 
 // QueryProfile fetches a profile by UUID. The HA profile cache is
-// consulted first; on miss the request is forwarded to HRPAuth and
+// consulted first; on miss the request is forwarded to Armorial and
 // the result is warmed into the cache.
 func (h *Handler) QueryProfile(c *gin.Context) {
 	uuid := c.Param("uuid")
@@ -189,7 +189,7 @@ func (h *Handler) QueryProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, profile)
 }
 
-// BatchQuery forwards a list of usernames directly to HRPAuth. Only
+// BatchQuery forwards a list of usernames directly to Armorial. Only
 // {id, name} summary is returned; textures properties are dropped per
 // Yggdrasil convention.
 //
@@ -205,12 +205,12 @@ func (h *Handler) BatchQuery(c *gin.Context) {
 	}
 	profiles, err := h.Hrpauth.BatchQuery(names)
 	if errors.Is(err, hrpauth.ErrEndpointMissing) {
-		log.Printf("hrpauth batch endpoint missing (upstream 404); check relay prefix / contract drift")
+		log.Printf("Armorial batch endpoint missing (upstream 404); check relay prefix / contract drift")
 		c.JSON(http.StatusBadGateway, gin.H{"error": "hrpauth batch endpoint missing"})
 		return
 	}
 	if err != nil {
-		log.Printf("hrpauth batch query failed: %v", err)
+		log.Printf("Armorial batch query failed: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "hrpauth upstream unavailable"})
 		return
 	}
