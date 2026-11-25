@@ -65,10 +65,14 @@ type registrationEnvelope struct {
 //     already holds its own low-privilege client (idempotent path:
 //     Exchanged=false, nothing may be written back).
 //
-// Every failure is returned as an error. Callers must abort startup
-// rather than fall back to running business traffic with the configured
-// credentials: super credentials must never reach business requests, and
-// unverified credentials must not be trusted.
+// Every failure is returned as an error. Connection-level failures
+// (transport errors, response read failures, 5xx answers) are wrapped
+// with ErrUpstream so callers may retry them; authoritative rejections
+// (400 invalid metadata, credentials that are neither super nor a valid
+// service client) are not retryable. Callers must never fall back to
+// running business traffic with the configured credentials: super
+// credentials must never reach business requests, and unverified
+// credentials must not be trusted.
 //
 // serviceName must be the name this service registers under via
 // /services/presence — HRPAuth rejects registration for unknown names.
@@ -96,19 +100,19 @@ func ResolveServiceCredentials(rootURL, serviceName, clientID, clientSecret stri
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("hrpauth: credential exchange request failed: %w", err)
+		return nil, fmt.Errorf("%w: credential exchange request failed: %v", ErrUpstream, err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("hrpauth: credential exchange response read failed: %w", err)
+		return nil, fmt.Errorf("%w: credential exchange response read failed: %v", ErrUpstream, err)
 	}
 
 	switch resp.StatusCode {
 	case http.StatusCreated:
 		var env registrationEnvelope
 		if err := json.Unmarshal(raw, &env); err != nil {
-			return nil, fmt.Errorf("hrpauth: credential exchange response undecodable: %w", err)
+			return nil, fmt.Errorf("%w: credential exchange response undecodable: %v", ErrUpstream, err)
 		}
 		meta := &env
 		if env.Data != nil && env.Data.ClientID != "" {
@@ -140,6 +144,9 @@ func ResolveServiceCredentials(rootURL, serviceName, clientID, clientSecret stri
 
 	default:
 		_, _ = io.Copy(io.Discard, resp.Body)
+		if resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("%w: credential exchange answered status %d", ErrUpstream, resp.StatusCode)
+		}
 		return nil, fmt.Errorf("hrpauth: credential exchange answered status %d", resp.StatusCode)
 	}
 }
@@ -162,10 +169,15 @@ func verifyServiceCredentials(rootURL, clientID, clientSecret string, httpClient
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: token verification request failed: %v", ErrCredentialsRejected, err)
+		// A transport failure means HRPAuth is unreachable, not that the
+		// credentials were rejected — keep it retryable.
+		return fmt.Errorf("%w: token verification request failed: %v", ErrUpstream, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("%w: token verification answered status %d", ErrUpstream, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%w: not the super client and no valid service client either (token endpoint answered %d)",
 			ErrCredentialsRejected, resp.StatusCode)

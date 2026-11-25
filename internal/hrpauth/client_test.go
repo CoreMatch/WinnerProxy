@@ -32,6 +32,43 @@ func TestNew_NilDoerDefaultsToHTTPClient(t *testing.T) {
 	}
 }
 
+// TestSetCredentials_SwapsTokenSource covers the degraded-startup path:
+// the client is constructed with empty credentials (HRPAuth unreachable
+// at boot) and receives the verified pair via SetCredentials later.
+func TestSetCredentials_SwapsTokenSource(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != basicHeader("good-id", "good-secret") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"tok","token_type":"Bearer","expires_in":3600}`))
+	})
+	mux.HandleFunc("/services/auth-key", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"internal_key":"k"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := New(srv.URL, "", "", nil)
+	c.SetServiceName("WinnerProxy")
+	if err := c.FetchInternalKey(); err == nil {
+		t.Fatal("expected failure while credentials are empty")
+	}
+	c.SetCredentials("good-id", "good-secret")
+	if err := c.FetchInternalKey(); err != nil {
+		t.Fatalf("unexpected error after SetCredentials: %v", err)
+	}
+	if got := c.internalKeyState(); got != "k" {
+		t.Errorf("internal key = %q, want k", got)
+	}
+}
+
 // --- HasJoined ---
 
 func TestHasJoined_200(t *testing.T) {

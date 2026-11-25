@@ -3,6 +3,7 @@ package hrpauth
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -152,8 +153,74 @@ func TestResolveServiceCredentialsUnreachable(t *testing.T) {
 	srv := stub.server()
 	srv.Close() // simulate HRPAuth down at startup
 
-	if _, err := ResolveServiceCredentials(srv.URL, "WinnerProxy", "id", "secret", nil); err == nil {
+	_, err := ResolveServiceCredentials(srv.URL, "WinnerProxy", "id", "secret", nil)
+	if err == nil {
 		t.Fatal("expected an error when HRPAuth is unreachable (no lenient degradation)")
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Errorf("error = %q, want ErrUpstream so the caller can retry the connection", err)
+	}
+	if errors.Is(err, ErrCredentialsRejected) {
+		t.Errorf("error = %q, a connection failure must not be classified as a credential rejection", err)
+	}
+}
+
+func TestResolveServiceCredentialsRejectionNotRetryable(t *testing.T) {
+	stub := &stubHRPAuth{
+		registerStatus: http.StatusBadRequest,
+		registerBody:   `{"success":false,"code":"invalid_client_metadata","message":"service not in presence registry"}`,
+	}
+	srv := stub.server()
+	defer srv.Close()
+
+	_, err := ResolveServiceCredentials(srv.URL, "WinnerProxy", "hrpauth-internal-super", "super-secret", nil)
+	if err == nil {
+		t.Fatal("expected an error when the registration metadata is rejected")
+	}
+	if errors.Is(err, ErrUpstream) {
+		t.Errorf("error = %q, an authoritative rejection must not be retryable", err)
+	}
+}
+
+func TestResolveServiceCredentialsTokenTransportFailureRetryable(t *testing.T) {
+	// register answers 401 (not the super client), then the token
+	// endpoint drops the connection: a transport failure, not a rejection.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/register":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"success":false,"code":"oauth_invalid_client"}`)
+		case "/oauth/token":
+			panic(http.ErrAbortHandler)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	_, err := ResolveServiceCredentials(srv.URL, "WinnerProxy", "id", "secret", nil)
+	if err == nil {
+		t.Fatal("expected an error when the token endpoint drops the connection")
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Errorf("error = %q, want ErrUpstream for a transport failure", err)
+	}
+	if errors.Is(err, ErrCredentialsRejected) {
+		t.Errorf("error = %q, a transport failure must not be classified as a credential rejection", err)
+	}
+}
+
+func TestResolveServiceCredentialsServerErrorRetryable(t *testing.T) {
+	stub := &stubHRPAuth{registerStatus: http.StatusInternalServerError}
+	srv := stub.server()
+	defer srv.Close()
+
+	_, err := ResolveServiceCredentials(srv.URL, "WinnerProxy", "id", "secret", nil)
+	if err == nil {
+		t.Fatal("expected an error for a 5xx register answer")
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Errorf("error = %q, want ErrUpstream for a 5xx answer", err)
 	}
 }
 
