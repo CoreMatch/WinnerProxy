@@ -115,6 +115,40 @@ type SDKConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// RetryConfig controls how WinnerProxy retries the HRPAuth management
+// connection. Startup credential resolution is attempted up to
+// StartupAttempts times (StartupIntervalSec apart); if HRPAuth is still
+// unreachable afterwards the proxy starts anyway in degraded mode and a
+// background loop retries every ReconnectIntervalSec until it succeeds.
+// Values <=0 fall back to the built-in defaults.
+type RetryConfig struct {
+	// StartupAttempts is the total number of startup resolution
+	// attempts. Default 10.
+	StartupAttempts int `yaml:"startup_attempts"`
+	// StartupIntervalSec is the pause between startup attempts in
+	// seconds. Default 5.
+	StartupIntervalSec int `yaml:"startup_interval_sec"`
+	// ReconnectIntervalSec is the pause between background reconnect
+	// attempts after a degraded startup, in seconds. Default 5.
+	ReconnectIntervalSec int `yaml:"reconnect_interval_sec"`
+}
+
+// Normalized returns the retry config with non-positive values replaced
+// by the built-in defaults (10 attempts, 5s startup interval, 5s
+// reconnect interval).
+func (r RetryConfig) Normalized() RetryConfig {
+	if r.StartupAttempts <= 0 {
+		r.StartupAttempts = 10
+	}
+	if r.StartupIntervalSec <= 0 {
+		r.StartupIntervalSec = 5
+	}
+	if r.ReconnectIntervalSec <= 0 {
+		r.ReconnectIntervalSec = 5
+	}
+	return r
+}
+
 // HrpauthBackendConfig controls the HRPAuth management integration.
 type HrpauthBackendConfig struct {
 	// URL is the HRPAuth management base URL (usually the root path).
@@ -127,6 +161,9 @@ type HrpauthBackendConfig struct {
 	Presence PresenceConfig `yaml:"presence"`
 	// SDK controls the SDK package upload.
 	SDK SDKConfig `yaml:"sdk"`
+	// Retry controls startup retries and background reconnection when
+	// HRPAuth is unreachable.
+	Retry RetryConfig `yaml:"retry"`
 }
 
 // UpstreamsConfig groups every upstream the proxy knows about.
@@ -161,6 +198,11 @@ func Default() *Config {
 			},
 			SDK: SDKConfig{
 				Enabled: true,
+			},
+			Retry: RetryConfig{
+				StartupAttempts:      10,
+				StartupIntervalSec:   5,
+				ReconnectIntervalSec: 5,
 			},
 		},
 		Cache: CacheConfig{
